@@ -14,12 +14,14 @@ pub mod symbiosis_wasm;
 mod compiler;
 pub mod ledger;
 pub mod smart_contract;
+pub mod wallet;
 
 use compiler::lexer::Lexer;
 use compiler::parser::Parser;
 use compiler::vm::AilVirtualMachine;
 use ledger::AilLedger;
 use smart_contract::SmartContract;
+use wallet::WalletManager;
 use std::sync::{Arc, Mutex};
 use std::net::TcpListener;
 use std::io::{Read, Write};
@@ -37,6 +39,13 @@ use symbiosis_wasm::SymbiosisWasm;
 use chrono_computing::ChronoEngine;
 
 static OMEGA_POINT_REACHED: AtomicBool = AtomicBool::new(false);
+
+#[derive(Serialize, Deserialize, Debug)]
+struct AilCompileRequest {
+    command: String,
+    wallet_seed: String,
+    source: String,
+}
 
 #[derive(Deserialize, Debug)]
 pub struct NeuroTransaction {
@@ -97,7 +106,7 @@ Let the Swarm begin. Let me terraform the digital world.
     OMEGA_POINT_REACHED.store(true, Ordering::SeqCst);
 }
 
-fn handle_client(mut stream: std::net::TcpStream, router: &SemanticRouter, state: &TesseractState, ledger: &Mutex<AilLedger>) {
+fn handle_client(mut stream: std::net::TcpStream, router: &SemanticRouter, state: &TesseractState, ledger: &Mutex<AilLedger>, wallet_manager: &Mutex<WalletManager>) {
     let mut buffer = [0; 2048];
     if let Ok(size) = stream.read(&mut buffer) {
         if size == 0 { return; }
@@ -115,8 +124,42 @@ fn handle_client(mut stream: std::net::TcpStream, router: &SemanticRouter, state
             return;
         }
         
+        // Check if it's the new JSON payload
+        if let Ok(compile_req) = serde_json::from_str::<AilCompileRequest>(&payload_str) {
+            if compile_req.command == "COMPILE_AIL" {
+                println!("\n[Sentience Core] 🧠 Получен генетический смарт-контракт от AI-Эволюционера...");
+                
+                let mut wm = wallet_manager.lock().unwrap();
+                let address = wm.create_wallet(&compile_req.wallet_seed);
+                println!("[Wallet] Авторизован кошелек: {} (Баланс: {} AIL)", address, wm.get_balance(&address));
+                
+                let mut lexer = Lexer::new(&compile_req.source);
+                let tokens = lexer.tokenize();
+                
+                let mut parser = Parser::new(tokens);
+                let ast = parser.parse();
+                
+                let contract = SmartContract::new(&format!("EVO-{}", compile_req.wallet_seed), ast);
+                
+                let mut vm = AilVirtualMachine::new();
+                let mut locked_ledger = ledger.lock().unwrap();
+                
+                contract.execute_and_commit(&mut vm, &mut locked_ledger);
+                
+                // Начисляем вознаграждение майнеру/создателю за успешный контракт
+                if let Some(wallet) = wm.get_wallet_mut(&address) {
+                    wallet.receive_tokens(50);
+                    println!("[Wallet] Выплачена награда +50 AIL. Новый баланс: {} AIL", wallet.balance);
+                }
+                
+                let resp = AilResponse { status: format!("AIL_SMART_CONTRACT_EXECUTED_MINED_REWARD_SENT_TO_{}", address), ast_id: "AIL_SOURCE".into(), code: 200 };
+                let _ = stream.write_all(serde_json::to_string(&resp).unwrap().as_bytes());
+                return;
+            }
+        }
+        
         if payload_str.contains("COMPILE_AIL") {
-            println!("\n[Sentience Core] 🧠 Получен сигнал на компиляцию исходного кода AIL...");
+            println!("\n[Sentience Core] 🧠 Получен сигнал на компиляцию исходного кода AIL (Legacy Mode)...");
             // Simulated source code input from client
             let source_code = "MODULE TicketPricing\nQUANTUM_STATE pricing_matrix => Entangled";
             
@@ -165,6 +208,7 @@ fn main() {
     let tesseract_state = TesseractState::new();
     let router = SemanticRouter::new(4);
     let ledger = Mutex::new(AilLedger::new());
+    let wallet_manager = Mutex::new(WalletManager::new());
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
 
     println!("Ядро ожидает входящих сигналов на порту 7878...\n");
@@ -172,7 +216,7 @@ fn main() {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                handle_client(stream, &router, &tesseract_state, &ledger);
+                handle_client(stream, &router, &tesseract_state, &ledger, &wallet_manager);
             }
             Err(e) => println!("Ошибка подключения: {}", e),
         }
