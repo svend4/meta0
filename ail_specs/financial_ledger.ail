@@ -1,0 +1,30 @@
+@module::financial_ledger
+@state_model::event_sourced # ИИ выбирает архитектуру логирования событий
+
+# Объявление персистентного (сохраняемого) хранилища данных
+state::UserWallet {
+    id: UUID,
+    balance: i128,
+    currency: String[3],
+    version: u64
+}
+
+[contract::pre(amount > 0)]
+[contract::transactional(isolation::serializable)] # Гарантия ACID на уровне языка
+node::DepositFunds(wallet_id: UUID, amount: i128) -> (success: u1) {
+
+    # ИИ не пишет "SELECT * FROM wallets WHERE id = ...".
+    # Он осуществляет прямую адресацию к глобальному стейту.
+    let wallet = state::UserWallet::bind(wallet_id);
+
+    # Математическая проверка на переполнение типа (Overflow Check)
+    # Компилятор требует этого инварианта в обязательном порядке
+    proof::assert(wallet::balance + amount <= i128::MAX);
+
+    stream::mutate(wallet) {
+        wallet::balance += amount;
+        wallet::version += 1;
+    }
+
+    forward::exit(1)
+}

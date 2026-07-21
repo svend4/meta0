@@ -1,0 +1,1 @@
+state::User { id: u64, name: String }

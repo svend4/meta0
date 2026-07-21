@@ -1,0 +1,70 @@
+{
+  "ast_root": {
+    "node_id": "ND_001",
+    "type": "AIL_Execution_Node",
+    "metadata": {
+      "module": "wallet_core",
+      "hardware_target": "vector_cpu_l1",
+      "execution_policy": "pure_stateless"
+    },
+    "contracts": [
+      {
+        "contract_type": "PreCondition",
+        "expression": {
+          "op": "GREATER_THAN",
+          "args": [{ "variable": "input_amount" }, { "literal_u64": 0 }]
+        }
+      }
+    ],
+    "inputs": [
+      { "name": "wallet_id", "data_type": "UUID" },
+      { "name": "input_amount", "data_type": "u64" }
+    ],
+    "outputs": [
+      { "name": "status", "data_type": "u16" }
+    ],
+    "body_graph": {
+      "edges": [
+        { "from": "IN_wallet_id", "to": "OP_BindState" },
+        { "from": "OP_BindState", "to": "OP_GetBalance" },
+        { "from": "OP_GetBalance", "to": "OP_CheckInvariant" },
+        { "from": "IN_input_amount", "to": "OP_CheckInvariant" },
+        { "from": "OP_CheckInvariant", "to": "BRANCH_Decision" }
+      ],
+      "nodes": {
+        "OP_BindState": {
+          "operation": "SYS_STATE_BIND",
+          "target_store": "GlobalLedger"
+        },
+        "OP_GetBalance": {
+          "operation": "MAP_GET_PROPERTY",
+          "property": "balance"
+        },
+        "OP_CheckInvariant": {
+          "operation": "MATH_SUB_SAFE_PROOF",
+          "description": "Проверка: balance >= input_amount"
+        },
+        "BRANCH_Decision": {
+          "operation": "CONDITIONAL_BRANCH",
+          "branches": {
+            "on_success": {
+              "operation": "STATE_MUTATE_SUB",
+              "property": "balance",
+              "next": { "operation": "FORWARD_EXIT", "literal_u16": 200 }
+            },
+            "on_overflow": {
+              "operation": "FORWARD_EXIT",
+              "literal_u16": 402
+            }
+          }
+        }
+      }
+    },
+    "proof_invariants": [
+      {
+        "proof_type": "NoIntegerUnderflow",
+        "assert": "state::GlobalLedger::balance >= 0"
+      }
+    ]
+  }
+}

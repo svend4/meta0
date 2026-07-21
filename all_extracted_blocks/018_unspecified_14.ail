@@ -1,0 +1,18 @@
+state::User {
+    id: u64,
+    name: String,
+    # Новое поле объявляется как опциональный ленивый поток
+    meta::dynamic_fields {
+        email: String [validation::regex_match(r"^[^@]+@[^@]+\.[^@]+$")]
+    }
+}
+
+node::GetEmail(user_id: u64) -> String {
+    let user = state::User::bind(user_id);
+
+    # ИИ генерирует адаптивный синтаксический мост
+    match::property(user::email) {
+        property::present => forward::exit(user::email),
+        property::absent  => forward::exit("default@mail.com") # Защита от старых записей
+    }
+}

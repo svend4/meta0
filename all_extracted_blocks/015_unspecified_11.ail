@@ -1,0 +1,21 @@
+@cluster_topology::dynamic_cloud_mesh
+
+# Модуль А: Скоринг
+node::CalculateScore(user_id: u64) -> (score: u16) {
+    # Математический контракт гарантии времени ответа
+    [contract::execution_budget(50, microseconds)]
+
+    let profile = state::UserProfile::bind(user_id);
+    forward::exit(profile::payment_history_weight * 10)
+}
+
+# Модуль Б: Решение о кредите
+node::ApproveLoan(user_id: u64, amount: u64) -> (approved: u1) {
+    # ИИ просто вызывает другой логический узел, как если бы он был локальным
+    let user_score = pipeline::call(node::CalculateScore, user_id);
+
+    match::value(user_score) {
+        x if x > 700 => forward::exit(1),
+        _            => forward::exit(0)
+    }
+}

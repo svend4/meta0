@@ -1,0 +1,35 @@
+@module::network_ingress_v4
+@execution_mode::stateless_kernel
+
+# Описание сетевого порта как источника бесконечного потока (Stream)
+source::HttpPort(address: "0.0.0.0:8080") -> stream[HttpPacket]
+
+node::RouteTraffic() {
+    # ИИ задает правила маршрутизации на основе предикатов
+    bind::stream(source::HttpPort)
+    -> packet_split::simd_accelerated
+    -> match::path {
+        "/api/v1/user"  => pipeline::execute(node::FetchUser),
+        "/api/v1/ready" => pipeline::execute(node::HealthCheck),
+        _               => pipeline::execute(node::Static404)
+    }
+}
+
+# Детальный узел обработки бизнес-логики
+[contract::max_allocation(256, bytes)] # Жесткий лимит памяти на один запрос!
+node::FetchUser(request: HttpPacket) -> response: HttpPacket {
+
+    # ИИ не ждет базу данных через await.
+    # Он объявляет ленивую зависимость (Data Dependency)
+    let user_id = request.body.query_param("id");
+    let db_future = database::cluster_pool::query_async("SELECT * FROM users WHERE id = ?", user_id);
+
+    # Компилятор сам решает, куда положить задачу:
+    # Если процессор занят, он переведет этот узел в режим ожидания на аппаратном уровне (Hardware Interrupt)
+    stream::yield_until(db_future::is_resolved) -> {
+        match::result(db_future) {
+            payload::valid => response::build_json(200, db_future::data),
+            payload::empty => response::build_plain(404, "Not Found")
+        }
+    }
+}

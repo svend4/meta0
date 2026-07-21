@@ -1,0 +1,11 @@
+{
+  "status": "Verification_Failed",
+  "error_node": "node::ProcessTransaction",
+  "reason": "Mathematical invariant violation",
+  "counter_example": {
+    "account_balance": -9223372036854775808,
+    "debit_amount": 1,
+    "result": "Integer_Underflow_Risk"
+  },
+  "suggested_fix_ast_patch": "L2: insert [contract::pre(account_balance >= debit_amount)]"
+}

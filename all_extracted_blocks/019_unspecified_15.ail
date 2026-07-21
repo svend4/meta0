@@ -1,0 +1,74 @@
+@module::production_ingress_counter
+@hardware_target::heterogeneous_cloud_node
+@execution_mode::stateless_kernel
+
+# ==========================================
+# 1. ГЛОБАЛЬНЫЙ СТЭЙТ (Вшитая База Данных в ОЗУ)
+# ==========================================
+state::MetricsStorage {
+    # Хэш-матрица в памяти для подсчета запросов с каждого IP
+    ip_request_matrix: Map[Vector[u8], u64],
+
+    # Общий счетчик успешно обработанных уникальных визитов
+    total_unique_visits: u64
+}
+
+# ==========================================
+# 2. МАТЕМАТИЧЕСКИЕ КОНТРАКТЫ БЕЗОПАСНОСТИ
+# ==========================================
+[contract::pre(ip_bytes::len == 4 || ip_bytes::len == 16)] # Валидация IPv4 / IPv6
+[contract::max_latency_cycles(850)]                         # Жесткий лимит на скорость работы узла
+[contract::transactional(isolation::linearizable)]          # Аппаратная изоляция данных
+
+# ==========================================
+# 3. ОСНОВНОЙ УЗЕЛ ОБРАБОТКИ (Входная точка)
+# ==========================================
+node::ProcessIncomingRequest(ip_bytes: Vector[u8]) -> (http_status: u16, payload: String) {
+
+    # Привязка к глобальному распределенному стейту
+    let storage = state::MetricsStorage::bind();
+
+    # Чтение текущего счетчика для данного IP-адреса
+    let current_ip_count = storage::ip_request_matrix::get_or_default(ip_bytes, 0);
+
+    # Конвейер логических проверок (ИИ строит потоки, а не циклы If/Else)
+    stream::pipe {
+        current_ip_count
+        -> check::is_greater_than(100) # Лимит: не более 100 запросов в секунду с одного IP
+        -> branch::on_condition(
+            # Ветка А: Лимит превышен (Подозрение на DDoS)
+            true => {
+                # ИИ автоматически активирует встроенный аппаратный файрвол для этого IP
+                sys::security::hardware_block_temporary(ip_bytes, duration::seconds(60));
+                forward::exit(429, "Error: Rate limit exceeded. IP blocked for 60s.")
+            },
+
+            # Ветка Б: Запрос легитимен
+            false => {
+                # Мутация стейта внутри защищенного кэша процессора (без дисковых ORM)
+                stream::mutate(storage) {
+                    # Если IP новый, увеличиваем счетчик уникальных визитов
+                    if current_ip_count == 0 {
+                        storage::total_unique_visits += 1;
+                    }
+                    # Инкрементируем счетчик запросов для этого конкретного IP
+                    storage::ip_request_matrix::insert(ip_bytes, current_ip_count + 1);
+                }
+
+                # Формируем успешный ответ
+                let response_text = string::format("Welcome! Total unique visitors: {}", storage::total_unique_visits);
+                forward::exit(200, response_text)
+            }
+        )
+    }
+
+    # ==========================================
+    # 4. МАТЕМАТИЧЕСКОЕ ДОКАЗАТЕЛЬСТВО (ДЛЯ ВЕРИФИКАТОРА)
+    # ==========================================
+    proof::invariant {
+        # Компилятор обязан доказать, что total_unique_visits никогда не превысит размер матрицы IP
+        assert(storage::total_unique_visits <= storage::ip_request_matrix::len);
+        # Гарантия отсутствия возможности утечки памяти (OutOfMemory)
+        assert::no_panic_on_overflow;
+    }
+}

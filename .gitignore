@@ -1,0 +1,27 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Logs & Binaries
+*.log
+*.exe
+*.dll
+*.so
+*.dylib
+
+# OS Generated
+.DS_Store
+Thumbs.db

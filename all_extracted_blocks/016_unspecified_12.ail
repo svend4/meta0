@@ -1,0 +1,21 @@
+@untrusted_module::image_resizer_v2
+@security_clearance::level_low
+
+# Компилятор жестко блокирует любые системные вызовы, не описанные в контракте
+[sandbox::deny_all]
+[sandbox::allow_memory_read(input_bytes)]
+[sandbox::allow_memory_write(output_bytes)]
+# Запрет на доступ к сети, дискам и системному времени по умолчанию!
+
+node::ResizePng(input_bytes: Vector[u8]) -> (output_bytes: Vector[u8]) {
+    # Попытка вредоносного кода внутри плагина совершить скрытый вызов сетевого сокета:
+    # ИИ-хакер пытается выполнить: sys::network::open_socket("malicious-site.com")
+
+    # Верификатор AIL при сборке строит граф разрешенных путей.
+    # Обнаружив узел sys::network внутри @security_clearance::level_low,
+    # компилятор прерывает сборку с математическим доказательством нарушения периметра:
+
+    proof::verify_execution_path {
+        assert::isolated_memory_only(input_bytes, output_bytes)
+    }
+}

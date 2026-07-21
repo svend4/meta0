@@ -1,0 +1,89 @@
+@module::ticket_booking_core
+@cluster_topology::multi_region_mesh
+@execution_mode::stateful_reactive
+
+# ==========================================
+# 1. ЕДИНОЕ ПРОСТРАНСТВО СОСТОЯНИЙ (Стейт)
+# ==========================================
+state::ConcertHall {
+    # Карта: Номер_Места (u32) => Статус бронирования
+    seats_manifest: Map[u32, SeatStatus]
+}
+
+type::SeatStatus = enum {
+    Available,
+    Reserved(expires_timestamp: u64, user_id: u64),
+    Sold(user_id: u64)
+}
+
+# ==========================================
+# 2. МАТЕМАТИЧЕСКИЕ КОНТРАКТЫ И ГАРАНТИИ
+# ==========================================
+[contract::pre(seat_id > 0 && seat_id <= 100_000)] # Защита от выхода за границы зала
+[contract::transactional(isolation::serializable)]  # Высший уровень ACID изоляции
+[contract::execution_budget(120, microseconds)]     # Ответ не дольше 120 микросекунд
+
+# ==========================================
+# 3. УЗЕЛ БРОНИРОВАНИЯ (Входная точка)
+# ==========================================
+node::TryReserveSeat(concert_id: UUID, seat_id: u32, user_id: u64) -> (status: u16, message: String) {
+
+    # Привязка к глобальному стейту конкретного концерта
+    let hall = state::ConcertHall::bind(concert_id);
+    let current_time = sys::time::nanoseconds_since_epoch();
+
+    # Извлечение текущего статуса места
+    let seat = hall::seats_manifest::get_or_default(seat_id, SeatStatus::Available);
+
+    stream::pipe {
+        seat
+        -> match::variant {
+            # Ветка 1: Место абсолютно свободно
+            SeatStatus::Available => {
+                execute::LockAndReserve(hall, seat_id, user_id, current_time)
+            },
+
+            # Ветка 2: Место кем-то забронировано, проверяем не истекло ли время (5 минут)
+            SeatStatus::Reserved(expires, old_user) => {
+                if current_time > expires {
+                    # Время истекло! Перебиваем бронь на нового пользователя
+                    execute::LockAndReserve(hall, seat_id, user_id, current_time)
+                } else {
+                    # Место еще занято
+                    forward::exit(409, "Conflict: Seat is currently reserved by another user")
+                }
+            },
+
+            # Ветка 3: Билет уже окончательно выкуплен
+            SeatStatus::Sold(owner) => {
+                forward::exit(422, "Unprocessable: Seat is already sold")
+            }
+        }
+    }
+
+    # ==========================================
+    # 4. МАТЕМАТИЧЕСКОЕ ДОКАЗАТЕЛЬСТВО БЕЗОПАСНОСТИ
+    # ==========================================
+    proof::invariant {
+        # ГЛАВНОЕ ДОКАЗАТЕЛЬСТВО: Компилятор должен математически подтвердить,
+        # что два разных user_id никогда не могут записаться на один seat_id одновременно.
+        assert::exclusion(
+            forall(s1: SeatStatus::Sold, s2: SeatStatus::Sold) => s1::user_id == s2::user_id
+        );
+        # Гарантия отсутствия взаимных блокировок (Deadlocks) при миллионном трафике
+        assert::deadlock_free;
+    }
+}
+
+# Вспомогательный атомарный узел записи данных
+node::LockAndReserve(hall: Ref[state::ConcertHall], seat_id: u32, user_id: u64, now: u64) {
+    let five_minutes_in_nanos = 300_000_000_000;
+
+    stream::mutate(hall) {
+        hall::seats_manifest::insert(
+            seat_id,
+            SeatStatus::Reserved(expires_timestamp: now + five_minutes_in_nanos, user_id: user_id)
+        );
+    }
+    forward::exit(201, "Success: Seat reserved for 5 minutes")
+}

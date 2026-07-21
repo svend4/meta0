@@ -1,0 +1,17 @@
+@module::matrix_compute_core
+@execution_policy::dynamic_heterogeneous # Разрешить деление между CPU и GPU
+
+[contract::pre(matrix_a::dimensions == matrix_b::dimensions)]
+[contract::pure] # Функция гарантированно не имеет побочных эффектов
+node::TensorMultiply(matrix_a: Tensor[f32, 2], matrix_b: Tensor[f32, 2]) -> Tensor[f32, 2] {
+
+    # ИИ просто описывает математическую операцию
+    let result = ops::tensor::dot_product(matrix_a, matrix_b);
+
+    # Аппаратный планировщик (Hardware Scheduler) внутри AIL на лету решает:
+    # 1. Если размер матрицы < 64x64 -> Выполнить на CPU (используя AVX-512)
+    # 2. Если размер матрицы > 64x64 -> Мгновенно перебросить задачу на тензорные ядра GPU/TPU
+    # Без изменения кода и перезапуска программы!
+
+    forward::exit(result)
+}

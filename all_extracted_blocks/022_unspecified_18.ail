@@ -1,0 +1,108 @@
+@module::ticket_payment_processor
+@cluster_topology::multi_region_mesh
+@execution_mode::stateful_reactive
+
+# ==========================================
+# 1. ДОПОЛНЕНИЕ К СТЭЙТУ (Финансовый лог)
+# ==========================================
+state::PaymentLedger {
+    # Сквозной лог транзакций для ИИ-аудита
+    transactions: Map[UUID, TransactionState]
+}
+
+type::TransactionState = enum {
+    Initiated(user_id: u64, seat_id: u32, timestamp: u64),
+    BankProcessing,
+    Completed,
+    Compensated(reason: String) # Откат брони в случае неудачи
+}
+
+# ==========================================
+# 2. МАТЕМАТИЧЕСКИЕ КОНТРАКТЫ НАДЕЖНОСТИ
+# ==========================================
+[contract::pre(user_id > 0)]
+# Внешний вызов не должен аффектить основное ядро: жесткая изоляция ресурсов
+[sandbox::network_io_allow(["://globalbank.com"])]
+[circuit_breaker::max_failures(3), circuit_breaker::cooldown(duration::seconds(30))]
+
+# ==========================================
+# 3. УЗЕЛ ОПЛАТЫ (Бизнес-логика Саги)
+# ==========================================
+node::ExecutePaymentSaga(concert_id: UUID, seat_id: u32, user_id: u64, amount: u64) -> u1 {
+
+    let ledger = state::PaymentLedger::bind();
+    let hall = state::ConcertHall::bind(concert_id);
+    let tx_id = sys::crypto::generate_uuid_v7();
+    let current_time = sys::time::nanoseconds_since_epoch();
+
+    # Шаг 1: Проверяем, что место действительно забронировано за ЭТИМ пользователем
+    let seat = hall::seats_manifest::get(seat_id);
+
+    match::variant(seat) {
+        SeatStatus::Reserved(expires, holder_id) if holder_id == user_id && expires > current_time => {
+            # Все отлично, фиксируем начало транзакции в нашем стейте
+            stream::mutate(ledger) {
+                ledger::transactions::insert(tx_id, TransactionState::Initiated(user_id, seat_id, current_time));
+            }
+
+            # Переходим к шагу 2: Запрос во внешний банк
+            execute::CallExternalBank(ledger, hall, tx_id, concert_id, seat_id, user_id, amount)
+        },
+        _ => {
+            # Бронь уже сгорела, пока пользователь шел к оплате
+            forward::exit(0)
+        }
+    }
+}
+
+# ==========================================
+# 4. ИЗОЛИРОВАННЫЙ УЗЕЛ ВНЕШНЕГО СЕТЕВОГО I/O
+# ==========================================
+# Этот узел компилятор помещает в отдельный поток, чтобы он не вешал основное ядро
+[execution::non_blocking_io]
+node::CallExternalBank(ledger: Ref, hall: Ref, tx_id: UUID, concert_id: UUID, seat_id: u32, user_id: u64, amount: u64) {
+
+    stream::mutate(ledger) {
+        ledger::transactions::insert(tx_id, TransactionState::BankProcessing);
+    }
+
+    # ИИ делает вызов внешней системы. Вшитый Circuit Breaker следит за таймаутом в 1500мс
+    let bank_response = sys::network::http_post(
+        "https://://globalbank.com/v1/charge",
+        json::encode({ "tx": tx_id, "uid": user_id, "val": amount }),
+        timeout::milliseconds(1500)
+    );
+
+    stream::pipe {
+        bank_response
+        -> match::network_result {
+            # Ветка А: Оплата успешна! Закрываем сделку
+            response::status_200 => {
+                stream::mutate(hall) {
+                    hall::seats_manifest::insert(seat_id, SeatStatus::Sold(user_id));
+                }
+                stream::mutate(ledger) {
+                    ledger::transactions::insert(tx_id, TransactionState::Completed);
+                }
+                forward::exit(1)
+            },
+
+            # Ветка Б: Ошибка банка (нет денег, неверная карта) или Таймаут/Сеть лежит
+            _ => {
+                # Запускаем компенсирующее действие (Откат брони)
+                execute::CompensateReservation(ledger, hall, tx_id, seat_id, "Bank execution failed");
+                forward::exit(0)
+            }
+        }
+    }
+}
+
+node::CompensateReservation(ledger: Ref, hall: Ref, tx_id: UUID, seat_id: u32, reason: String) {
+    stream::mutate(ledger) {
+        ledger::transactions::insert(tx_id, TransactionState::Compensated(reason));
+    }
+    stream::mutate(hall) {
+        # Возвращаем место в свободную продажу, так как оплата не прошла
+        hall::seats_manifest::insert(seat_id, SeatStatus::Available);
+    }
+}

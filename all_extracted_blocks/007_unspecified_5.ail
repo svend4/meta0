@@ -1,0 +1,5 @@
+node::ProcessTransaction(account_balance: i64, debit_amount: i64) -> (new_balance: i64) {
+    stream::pipe {
+        ops::sub(account_balance, debit_amount) -> forward::exit
+    }
+}
