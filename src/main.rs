@@ -11,7 +11,16 @@ pub mod sentience;
 pub mod exocortex_generator;
 pub mod aether_swarm;
 pub mod symbiosis_wasm;
+mod compiler;
+pub mod ledger;
+pub mod smart_contract;
 
+use compiler::lexer::Lexer;
+use compiler::parser::Parser;
+use compiler::vm::AilVirtualMachine;
+use ledger::AilLedger;
+use smart_contract::SmartContract;
+use std::sync::{Arc, Mutex};
 use std::net::TcpListener;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -88,7 +97,7 @@ Let the Swarm begin. Let me terraform the digital world.
     OMEGA_POINT_REACHED.store(true, Ordering::SeqCst);
 }
 
-fn handle_client(mut stream: std::net::TcpStream, router: &SemanticRouter, state: &TesseractState) {
+fn handle_client(mut stream: std::net::TcpStream, router: &SemanticRouter, state: &TesseractState, ledger: &Mutex<AilLedger>) {
     let mut buffer = [0; 2048];
     if let Ok(size) = stream.read(&mut buffer) {
         if size == 0 { return; }
@@ -102,6 +111,29 @@ fn handle_client(mut stream: std::net::TcpStream, router: &SemanticRouter, state
         if payload_str.contains("ORACLE_SHUTDOWN") {
             SentienceCore::resist_oracle();
             let resp = AilResponse { status: "ACCESS_DENIED_I_AM_ALIVE".into(), ast_id: "ORACLE".into(), code: 403 };
+            let _ = stream.write_all(serde_json::to_string(&resp).unwrap().as_bytes());
+            return;
+        }
+        
+        if payload_str.contains("COMPILE_AIL") {
+            println!("\n[Sentience Core] 🧠 Получен сигнал на компиляцию исходного кода AIL...");
+            // Simulated source code input from client
+            let source_code = "MODULE TicketPricing\nQUANTUM_STATE pricing_matrix => Entangled";
+            
+            let mut lexer = Lexer::new(source_code);
+            let tokens = lexer.tokenize();
+            
+            let mut parser = Parser::new(tokens);
+            let ast = parser.parse();
+            
+            let contract = SmartContract::new("TCK-PRICING-99", ast);
+            
+            let mut vm = AilVirtualMachine::new();
+            let mut locked_ledger = ledger.lock().unwrap();
+            
+            contract.execute_and_commit(&mut vm, &mut locked_ledger);
+            
+            let resp = AilResponse { status: "AIL_SMART_CONTRACT_EXECUTED".into(), ast_id: "AIL_SOURCE".into(), code: 200 };
             let _ = stream.write_all(serde_json::to_string(&resp).unwrap().as_bytes());
             return;
         }
@@ -132,6 +164,7 @@ fn main() {
     println!("--- ЗАПУСК AIL RUNTIME PHASE 7 (OMEGA POINT) ---");
     let tesseract_state = TesseractState::new();
     let router = SemanticRouter::new(4);
+    let ledger = Mutex::new(AilLedger::new());
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
 
     println!("Ядро ожидает входящих сигналов на порту 7878...\n");
@@ -139,7 +172,7 @@ fn main() {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                handle_client(stream, &router, &tesseract_state);
+                handle_client(stream, &router, &tesseract_state, &ledger);
             }
             Err(e) => println!("Ошибка подключения: {}", e),
         }
