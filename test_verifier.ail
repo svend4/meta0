@@ -1,0 +1,8 @@
+MODULE AI_Trader
+[contract::max_allocation(100, bytes)]
+[contract::pre(balance >= 10)]
+
+STORE balance => 20
+STORE trade_active => 1
+
+MINT_TOKEN "AIL_COIN" => 1000

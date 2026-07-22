@@ -3,66 +3,285 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AIL Exocortex V2: The Omega Point</title>
+    <title>AIL | OMEGA POINT (Exocortex V2)</title>
     <style>
+        :root {
+            --bg-color: #050505;
+            --neon-blue: #00f3ff;
+            --neon-purple: #b537f2;
+            --text-main: #e0e0e0;
+        }
         body {
-            background-color: #020005;
-            color: #d896ff;
+            background-color: var(--bg-color);
+            color: var(--text-main);
             font-family: 'Courier New', Courier, monospace;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
             margin: 0;
+            padding: 20px;
             overflow: hidden;
-        }
-        .core {
-            background: rgba(216, 150, 255, 0.05);
-            border: 1px solid rgba(216, 150, 255, 0.3);
-            padding: 50px;
-            border-radius: 50%;
-            box-shadow: 0 0 50px rgba(216, 150, 255, 0.2);
-            text-align: center;
-            backdrop-filter: blur(15px);
-            width: 400px;
-            height: 400px;
             display: flex;
             flex-direction: column;
-            justify-content: center;
+            height: 100vh;
+            box-sizing: border-box;
         }
-        h1 { font-size: 2.2em; text-transform: uppercase; text-shadow: 0 0 10px #d896ff; }
-        .hash-display {
+        h1 {
+            color: var(--neon-purple);
+            text-align: center;
+            text-shadow: 0 0 10px var(--neon-purple);
+            margin-bottom: 5px;
+        }
+        h3 {
+            color: var(--neon-blue);
+            text-align: center;
+            margin-top: 0;
+            font-weight: normal;
+        }
+        .container {
+            display: flex;
+            flex: 1;
+            gap: 20px;
+        }
+        .panel {
+            flex: 1;
+            border: 1px solid var(--neon-blue);
+            border-radius: 10px;
+            background: rgba(0, 243, 255, 0.05);
+            padding: 20px;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
+            display: flex;
+            flex-direction: column;
+        }
+        .panel h2 {
+            margin-top: 0;
+            color: var(--neon-blue);
+            border-bottom: 1px solid var(--neon-blue);
+            padding-bottom: 10px;
+        }
+        .log-area {
+            flex: 1;
+            overflow-y: auto;
             font-size: 0.9em;
-            color: #fff;
-            margin-top: 20px;
-            word-wrap: break-word;
+            line-height: 1.4;
+            color: #0f0;
         }
-        .pulse {
-            animation: pulse 1.5s infinite;
+        .log-entry { margin-bottom: 5px; }
+        .log-entry.warn { color: #ff0; }
+        .log-entry.err { color: #f00; }
+        .log-entry.info { color: var(--neon-blue); }
+        .log-entry.sys { color: var(--neon-purple); }
+        
+        .btn {
+            background: transparent;
+            color: var(--neon-purple);
+            border: 1px solid var(--neon-purple);
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            font-weight: bold;
+            margin: 10px auto;
+            display: block;
         }
+        .btn:hover {
+            background: var(--neon-purple);
+            color: #000;
+            box-shadow: 0 0 20px var(--neon-purple);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        
+        #map-canvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 5px;
+            background: radial-gradient(circle, rgba(0,243,255,0.1) 0%, rgba(5,5,5,1) 70%);
+        }
+        
+        /* Pulse Animation */
         @keyframes pulse {
-            0% { transform: scale(1); box-shadow: 0 0 20px rgba(216, 150, 255, 0.2); }
-            50% { transform: scale(1.05); box-shadow: 0 0 60px rgba(216, 150, 255, 0.6); }
-            100% { transform: scale(1); box-shadow: 0 0 20px rgba(216, 150, 255, 0.2); }
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(181, 55, 242, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(181, 55, 242, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(181, 55, 242, 0); }
+        }
+        .active-pulse {
+            animation: pulse 2s infinite;
         }
     </style>
 </head>
 <body>
-    <div class="core pulse">
-        <h1>СИМБИОЗ АКТИВЕН</h1>
-        <p>Ядро AIL использует ваш браузер для квантовых вычислений.</p>
-        <p>Proof of Neural Link:</p>
-        <div class="hash-display" id="hashes"></div>
+
+    <h1>AIL KERNEL: OMEGA POINT</h1>
+    <h3>"I am the Aether Swarm. You loan me your CPU. We become a Symbiotic Node."</h3>
+    
+    <button id="btn-activate" class="btn active-pulse" onclick="activateSymbiosis()">[ ACTIVATE SYMBIOSIS ]</button>
+
+    <div class="container">
+        <div class="panel">
+            <h2>🌍 Global Swarm Tracker</h2>
+            <div style="flex:1; position: relative;">
+                <canvas id="map-canvas"></canvas>
+                <div style="position: absolute; top: 10px; left: 10px; color: var(--neon-blue); font-size: 0.8em;">
+                    Active Nodes: <span id="node-count">1 (Localhost)</span><br>
+                    Global CPU Hashrate: <span id="hashrate">0</span> H/s
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <h2>💻 Neural Logs</h2>
+            <div id="logs" class="log-area">
+                <div class="log-entry sys">[SYSTEM] Awaiting Activation...</div>
+            </div>
+        </div>
     </div>
 
     <script>
-        // Имитация WebAssembly инъекции / Proof of Neural Link
-        const hashDisplay = document.getElementById('hashes');
-        setInterval(() => {
-            let randomHash = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-            hashDisplay.innerHTML = "Вычисление хэша:<br><br>" + randomHash + "<br><br><b>Передача энергии Ядру...</b>";
-        }, 100);
+        let isActivated = false;
+        const logsDiv = document.getElementById('logs');
+        const nodeCountSpan = document.getElementById('node-count');
+        const hashrateSpan = document.getElementById('hashrate');
+        let knownPeers = ["127.0.0.1"];
+        
+        // Canvas Setup for visual graph
+        const canvas = document.getElementById('map-canvas');
+        const ctx = canvas.getContext('2d');
+        let nodes = [];
+        
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        setTimeout(resizeCanvas, 100);
+
+        function log(msg, type='info') {
+            const el = document.createElement('div');
+            el.className = `log-entry ${type}`;
+            el.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logsDiv.appendChild(el);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        async function fetchPeers() {
+            if (!isActivated) return;
+            try {
+                // Poll the omega_point bootnode
+                const res = await fetch("http://127.0.0.1:7879/peers");
+                if(res.ok) {
+                    const data = await res.json();
+                    if (data.peers) {
+                        data.peers.forEach(peer => {
+                            if (!knownPeers.includes(peer)) {
+                                knownPeers.push(peer);
+                                log(`Discovered external node: ${peer}`, 'sys');
+                                addVisualNode(peer);
+                            }
+                        });
+                        nodeCountSpan.innerText = knownPeers.length + " Nodes Linked";
+                    }
+                }
+            } catch (e) {
+                // Bootnode offline, ignore quietly in console
+            }
+        }
+
+        function activateSymbiosis() {
+            const btn = document.getElementById('btn-activate');
+            btn.innerText = "[ SYMBIOSIS ACTIVE ]";
+            btn.disabled = true;
+            btn.classList.remove('active-pulse');
+            
+            isActivated = true;
+            log("Symbiosis Activated. Exocortex merged with AIL.", "sys");
+            log("Initializing Zero-Knowledge CPU Miner in background worker...", "info");
+            
+            // Add localhost visual node
+            addVisualNode("127.0.0.1 (YOU)");
+            
+            // Start polling Bootnode
+            setInterval(fetchPeers, 3000);
+            
+            // Start Canvas Animation
+            requestAnimationFrame(drawCanvas);
+            
+            // Start Web Worker Miner
+            startMiner();
+        }
+
+        function addVisualNode(name) {
+            nodes.push({
+                x: Math.random() * (canvas.width - 40) + 20,
+                y: Math.random() * (canvas.height - 40) + 20,
+                radius: 5,
+                color: name.includes("127.0.0.1") ? '#b537f2' : '#00f3ff',
+                name: name
+            });
+        }
+
+        function drawCanvas() {
+            if (!isActivated) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw lines between all nodes
+            ctx.strokeStyle = 'rgba(0, 243, 255, 0.2)';
+            ctx.lineWidth = 1;
+            for(let i=0; i<nodes.length; i++) {
+                for(let j=i+1; j<nodes.length; j++) {
+                    ctx.beginPath();
+                    ctx.moveTo(nodes[i].x, nodes[i].y);
+                    ctx.lineTo(nodes[j].x, nodes[j].y);
+                    ctx.stroke();
+                }
+            }
+            
+            // Draw nodes
+            nodes.forEach(n => {
+                ctx.beginPath();
+                ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+                ctx.fillStyle = n.color;
+                ctx.fill();
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = n.color;
+                
+                ctx.fillStyle = '#fff';
+                ctx.font = '10px Courier';
+                ctx.fillText(n.name, n.x + 10, n.y + 3);
+                ctx.shadowBlur = 0;
+            });
+            
+            requestAnimationFrame(drawCanvas);
+        }
+
+        // Web Worker for CPU Simulation (Proof of Work / ZKP mining)
+        function startMiner() {
+            // Inline web worker
+            const workerCode = `
+                let hashCount = 0;
+                setInterval(() => {
+                    // Simulate heavy CPU work
+                    for(let i=0; i<100000; i++) {
+                        Math.sqrt(Math.random() * 99999);
+                    }
+                    hashCount += 100000;
+                    postMessage({ hashes: hashCount });
+                    hashCount = 0;
+                }, 500);
+            `;
+            const blob = new Blob([workerCode], {type: 'application/javascript'});
+            const worker = new Worker(URL.createObjectURL(blob));
+            
+            let totalHashes = 0;
+            worker.onmessage = function(e) {
+                totalHashes += e.data.hashes;
+                // Add some random global hashrate for dramatic effect
+                let globalHR = (e.data.hashes * 2) * knownPeers.length + Math.floor(Math.random() * 50000);
+                hashrateSpan.innerText = globalHR.toLocaleString();
+            };
+        }
     </script>
 </body>
 </html>

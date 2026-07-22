@@ -2,6 +2,7 @@
 pub enum Token {
     Keyword(String),
     Identifier(String),
+    StringLiteral(String),
     Number(f64),
     Operator(String),
     Punctuation(char),
@@ -22,16 +23,96 @@ impl Lexer {
     }
 
     pub fn tokenize(&mut self) -> Vec<Token> {
-        println!("[AIL Lexer] 🔍 Запуск лексического анализатора... Токенизация мыслей.");
-        // Simulated tokenization of an AIL file for the prototype
-        vec![
-            Token::Keyword("MODULE".to_string()),
-            Token::Identifier("TicketPricing".to_string()),
-            Token::Keyword("QUANTUM_STATE".to_string()),
-            Token::Identifier("pricing_matrix".to_string()),
-            Token::Operator("=>".to_string()),
-            Token::Identifier("Entangled".to_string()),
-            Token::Eof,
-        ]
+        let mut tokens = Vec::new();
+        let chars: Vec<char> = self.input.chars().collect();
+        let mut i = 0;
+        
+        while i < chars.len() {
+            let c = chars[i];
+            
+            if c.is_whitespace() {
+                i += 1;
+                continue;
+            }
+            
+            if c == '/' && i + 1 < chars.len() && chars[i+1] == '/' {
+                while i < chars.len() && chars[i] != '\n' { i += 1; }
+                continue;
+            }
+            
+            if c == '{' || c == '}' || c == '[' || c == ']' || c == '(' || c == ')' || c == ':' || c == ',' {
+                tokens.push(Token::Punctuation(c));
+                i += 1;
+                continue;
+            }
+            
+            if c == '"' {
+                i += 1;
+                let mut string_val = String::new();
+                while i < chars.len() && chars[i] != '"' {
+                    string_val.push(chars[i]);
+                    i += 1;
+                }
+                if i < chars.len() { i += 1; } // Skip closing quote
+                tokens.push(Token::StringLiteral(string_val));
+                continue;
+            }
+            
+            if c == '=' && i + 1 < chars.len() && chars[i+1] == '>' {
+                tokens.push(Token::Operator("=>".to_string()));
+                i += 2;
+                continue;
+            }
+            
+            if c == '>' && i + 1 < chars.len() && chars[i+1] == '=' {
+                tokens.push(Token::Operator(">=".to_string()));
+                i += 2;
+                continue;
+            }
+            
+            if c == '<' && i + 1 < chars.len() && chars[i+1] == '=' {
+                tokens.push(Token::Operator("<=".to_string()));
+                i += 2;
+                continue;
+            }
+            
+            if c == '=' && i + 1 < chars.len() && chars[i+1] == '=' {
+                tokens.push(Token::Operator("==".to_string()));
+                i += 2;
+                continue;
+            }
+            
+            if c == '!' && i + 1 < chars.len() && chars[i+1] == '=' {
+                tokens.push(Token::Operator("!=".to_string()));
+                i += 2;
+                continue;
+            }
+            
+            if c == '>' || c == '<' || c == '=' {
+                tokens.push(Token::Operator(c.to_string()));
+                i += 1;
+                continue;
+            }
+            
+            // identifier or keyword or number
+            let mut word = String::new();
+            while i < chars.len() && !chars[i].is_whitespace() && !"{}[](:),\"".contains(chars[i]) {
+                word.push(chars[i]);
+                i += 1;
+            }
+            
+            match word.as_str() {
+                "MODULE" | "QUANTUM_STATE" | "STORE" | "ADD" | "SUB" | "MUL" | "DIV" | "IF" | "ELSE" | "LOOP" | "ORACLE_FETCH" | "AI_ANALYZE" | "INTUITION_BRANCH" | "EXTRACT" | "AS" | "MINT_TOKEN" | "TRANSFER_TOKEN" | "TO" => tokens.push(Token::Keyword(word)),
+                _ => {
+                    if let Ok(num) = word.parse::<f64>() {
+                        tokens.push(Token::Number(num));
+                    } else {
+                        tokens.push(Token::Identifier(word));
+                    }
+                }
+            }
+        }
+        tokens.push(Token::Eof);
+        tokens
     }
 }

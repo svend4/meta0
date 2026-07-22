@@ -25,3 +25,9 @@ venv.bak/
 # OS Generated
 .DS_Store
 Thumbs.db
+
+# Runtime artifacts (генерируемое состояние ноды, не исходники)
+ail_ledger_*.json
+ail_wallets_*.json
+ail_state_tree_*.json
+ail_event_log.jsonl

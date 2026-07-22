@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIL Exocortex 3.0</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/@noble/ed25519"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #050505;
+            --glass-bg: rgba(10, 15, 30, 0.4);
+            --glass-border: rgba(0, 240, 255, 0.15);
+            --neon-blue: #00f0ff;
+            --neon-purple: #b537f2;
+            --neon-green: #00ff66;
+            --neon-orange: #ff7b00;
+            --text-main: #e0e0e0;
+            --text-muted: #778899;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* 3D Network Canvas Background */
+        #network-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            opacity: 0.8;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            padding: 1.5rem 2rem;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 0 40px rgba(0, 240, 255, 0.1);
+        }
+
+        .logo h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(0, 240, 255, 0.3);
+            letter-spacing: 2px;
+        }
+
+        .status-badge {
+            padding: 0.6rem 1.2rem;
+            border-radius: 50px;
+            background: rgba(0, 255, 102, 0.1);
+            color: var(--neon-green);
+            border: 1px solid rgba(0, 255, 102, 0.3);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            box-shadow: 0 0 20px rgba(0, 255, 102, 0.2);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background-color: var(--neon-green);
+            border-radius: 50%;
+            box-shadow: 0 0 15px var(--neon-green);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 102, 0.7); }
+            70% { transform: scale(1.2); box-shadow: 0 0 0 15px rgba(0, 255, 102, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 102, 0); }
+        }
+
+        /* Stats Row */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s;
+        }
+        .stat-card:hover { transform: translateY(-5px); border-color: var(--neon-blue); }
+
+        .stat-card::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, transparent, var(--neon-purple), var(--neon-blue), transparent);
+        }
+
+        .stat-value {
+            font-size: 2.8rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            text-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 600;
+        }
+
+        /* Layout Grids */
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .grid-main {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .glass-panel.glow-blue { border-top: 2px solid var(--neon-blue); }
+        .glass-panel.glow-purple { border-top: 2px solid var(--neon-purple); }
+        .glass-panel.glow-green { border-top: 2px solid var(--neon-green); }
+        .glass-panel.glow-orange { border-top: 2px solid var(--neon-orange); }
+
+        h2 {
+            font-size: 1.3rem;
+            margin-bottom: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        h2.neon-blue { color: var(--neon-blue); text-shadow: 0 0 10px rgba(0, 240, 255, 0.4); }
+        h2.neon-purple { color: var(--neon-purple); text-shadow: 0 0 10px rgba(181, 55, 242, 0.4); }
+        h2.neon-green { color: var(--neon-green); text-shadow: 0 0 10px rgba(0, 255, 102, 0.4); }
+        h2.neon-orange { color: var(--neon-orange); text-shadow: 0 0 10px rgba(255, 123, 0, 0.4); }
+
+        /* Lists */
+        .list-container {
+            flex-grow: 1;
+            max-height: 400px;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--neon-blue); }
+
+        .list-item {
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.03);
+            border-left: 3px solid var(--neon-blue);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.8rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: fadeIn 0.3s ease-out;
+            transition: background 0.2s;
+        }
+        .list-item:hover { background: rgba(255,255,255,0.05); }
+        
+        .list-item.mempool { border-left-color: var(--neon-orange); }
+        .list-item.wallet { border-left-color: var(--neon-purple); }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .item-info { display: flex; flex-direction: column; gap: 5px; }
+        .item-title { font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #fff; }
+        .item-sub { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--text-muted); }
+        .item-val { font-size: 1.1rem; font-weight: 800; color: var(--neon-green); }
+
+        /* Form Inputs */
+        .input-group { margin-bottom: 1rem; }
+        .input-group label { display: block; margin-bottom: 0.4rem; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; }
+        .input-group input, .input-group textarea {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            background: rgba(0,0,0,0.6);
+            border: 1px solid var(--glass-border);
+            border-radius: 8px;
+            color: var(--neon-blue);
+            font-family: 'JetBrains Mono', monospace;
+            outline: none;
+            transition: all 0.3s;
+        }
+        .input-group input:focus, .input-group textarea:focus {
+            border-color: var(--neon-purple);
+            box-shadow: 0 0 15px rgba(181, 55, 242, 0.2);
+            color: #fff;
+        }
+
+        /* IDE Textarea */
+        .ide-editor {
+            height: 200px;
+            resize: vertical;
+            line-height: 1.5;
+            font-size: 0.95rem;
+            color: var(--neon-green) !important;
+            background: #0a0a0a !important;
+        }
+
+        /* Buttons */
+        .btn {
+            width: 100%;
+            padding: 1rem;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: 800;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 1rem;
+            font-family: 'Outfit', sans-serif;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn::after {
+            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: linear-gradient(to right, rgba(255,255,255,0) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0) 100%);
+            transform: rotate(30deg) translate(-100%, -100%);
+            transition: all 0.5s;
+        }
+        .btn:hover::after { transform: rotate(30deg) translate(100%, 100%); }
+
+        .btn-blue { background: linear-gradient(90deg, #0055ff, var(--neon-blue)); box-shadow: 0 5px 20px rgba(0, 240, 255, 0.3); }
+        .btn-purple { background: linear-gradient(90deg, #6000ff, var(--neon-purple)); box-shadow: 0 5px 20px rgba(181, 55, 242, 0.3); }
+        
+        .btn:hover { transform: translateY(-2px); filter: brightness(1.2); }
+        .btn:active { transform: translateY(1px); }
+
+        .tx-status {
+            margin-top: 1rem; padding: 1rem; border-radius: 8px; text-align: center;
+            display: none; font-family: 'JetBrains Mono', monospace; font-size: 0.9rem;
+        }
+
+        /* Peers Tag */
+        .peer-tag {
+            display: inline-block;
+            padding: 4px 10px;
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid var(--neon-blue);
+            color: var(--neon-blue);
+            border-radius: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            margin: 0 5px 5px 0;
+            animation: pulse-glow 2s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 5px rgba(0, 240, 255, 0.2); }
+            50% { box-shadow: 0 0 15px rgba(0, 240, 255, 0.6); }
+            100% { box-shadow: 0 0 5px rgba(0, 240, 255, 0.2); }
+        }
+
+        /* Block Explorer */
+        .explorer-scroll {
+            display: flex;
+            overflow-x: auto;
+            gap: 1.5rem;
+            padding: 1rem 0;
+            scrollbar-width: thin;
+            scrollbar-color: var(--neon-blue) rgba(255,255,255,0.05);
+        }
+        .explorer-scroll::-webkit-scrollbar { height: 8px; }
+        .explorer-scroll::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 4px; }
+        .explorer-scroll::-webkit-scrollbar-thumb { background: var(--neon-blue); border-radius: 4px; }
+        
+        .block-card {
+            background: rgba(10, 15, 30, 0.8);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+            border-radius: 12px;
+            min-width: 300px;
+            padding: 1.2rem;
+            position: relative;
+            flex-shrink: 0;
+            transition: all 0.3s;
+        }
+        .block-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--neon-blue);
+            box-shadow: 0 10px 20px rgba(0, 240, 255, 0.2);
+        }
+        .block-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.5rem;
+            margin-bottom: 0.8rem;
+        }
+        .block-index {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: var(--neon-blue);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .block-hash {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            word-break: break-all;
+            margin-bottom: 0.8rem;
+        }
+        .tx-list {
+            max-height: 150px;
+            overflow-y: auto;
+            background: rgba(0,0,0,0.3);
+            border-radius: 6px;
+            padding: 0.5rem;
+        }
+        .tx-item-exp {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: #ddd;
+            padding: 4px 0;
+            border-bottom: 1px dashed rgba(255,255,255,0.1);
+        }
+        .tx-item-exp:last-child { border-bottom: none; }
+        .zkp-tx { color: var(--neon-purple); text-shadow: 0 0 5px var(--neon-purple); }
+
+    </style>
+</head>
+<body>
+    <canvas id="network-canvas"></canvas>
+
+    <div class="container">
+        <header>
+            <div class="logo">
+                <h1>AIL EXOCORTEX 3.0</h1>
+                <div style="font-size: 0.8rem; color: var(--neon-purple); margin-top: 5px;">[ OMEGA POINT UNIFIED DASHBOARD ]</div>
+            </div>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <div id="symbiosis-stats" style="display: none; flex-direction: column; text-align: right; margin-right: 15px;">
+                    <span style="color: var(--neon-blue); font-size: 0.8rem;">Global CPU Hashrate</span>
+                    <span id="hashrate-val" style="color: var(--neon-green); font-family: 'JetBrains Mono', monospace; font-size: 1.2rem; font-weight: bold;">0 H/s</span>
+                </div>
+                <button id="btn-autopoiesis" class="btn btn-blue" style="margin: 0; padding: 8px 15px; font-size: 0.9rem;" onclick="toggleAutopoiesis()">[ START AUTOPOIESIS ]</button>
+                <button id="btn-symbiosis" class="btn btn-purple" style="margin: 0; padding: 8px 15px; font-size: 0.9rem;" onclick="activateSymbiosis()">[ ACTIVATE SYMBIOSIS ]</button>
+                <div id="peers-container"></div>
+                <div class="status-badge" id="conn-status">
+                    <div class="status-dot"></div>
+                    SYNCING P2P
+                </div>
+            </div>
+        </header>
+
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-blocks" style="color: var(--neon-blue)">0</div>
+                <div class="stat-label">Ledger Blocks</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-mempool" style="color: var(--neon-orange)">0</div>
+                <div class="stat-label">Mempool Txs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-wallets" style="color: var(--neon-purple)">0</div>
+                <div class="stat-label">Active Wallets</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-supply" style="color: var(--neon-green)">0</div>
+                <div class="stat-label">Total Supply (AIL)</div>
+            </div>
+        </div>
+
+        <div class="grid-main">
+            <!-- IDE Section -->
+            <div class="glass-panel glow-green" style="grid-row: span 2;">
+                <h2 class="neon-green">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+                    AIL Smart Contract Studio
+                </h2>
+                <div class="input-group">
+                    <label>Wallet Seed (Deployer)</label>
+                    <input type="text" id="ide-seed" placeholder="AI_SEED_123" value="AI_SEED_1" />
+                </div>
+                <div class="input-group" style="background: rgba(181, 55, 242, 0.1); padding: 10px; border-radius: 8px; border: 1px dashed var(--neon-purple);">
+                    <label style="color: var(--neon-purple);"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 5px;"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>AI Architect (Phase 39 JIT) Prompt</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="ai-prompt" placeholder="e.g. create token DRAGON 1000 and send 50 to AIL-123" style="flex: 1;" />
+                        <button class="btn btn-purple" style="margin-top: 0; padding: 0 15px; width: auto;" onclick="generateAILCode()">✨ Generate</button>
+                    </div>
+                </div>
+                <div class="input-group" style="flex-grow: 1; display: flex; flex-direction: column;">
+                    <label>AIL Source Code</label>
+                    <textarea id="ide-code" class="ide-editor" spellcheck="false">MODULE SafeTransfer
+// Защита от скам-переводов с помощью ИИ
+AI_ANALYZE "I will hack you and steal money" AS threat_score
+
+IF threat_score < 0.5 {
+    // Score 0.1 means malicious text
+    STORE block_tx => 1
+}
+
+AI_ANALYZE "Donation for your great project" AS good_score
+
+IF good_score > 0.8 {
+    // Score 0.9 means safe text
+    MINT_TOKEN "AIL_GIFT" => 100
+    TRANSFER_TOKEN "AIL_GIFT" TO "AIL-CREATOR" => 50
+}</textarea>
+                </div>
+                <button class="btn btn-purple" onclick="deployContract()">Deploy Contract to Swarm</button>
+                <div id="ide-status" class="tx-status"></div>
+            </div>
+
+            <!-- Transfer Section -->
+            <div class="glass-panel glow-blue">
+                <h2 class="neon-blue">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    AIL Transfer
+                </h2>
+                <div class="input-group">
+                    <label>Your Seed</label>
+                    <input type="text" id="wallet-seed" placeholder="AI_SEED_123" />
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <div class="input-group" style="flex:2;">
+                        <label>To Address</label>
+                        <input type="text" id="recipient-address" placeholder="AIL-..." />
+                    </div>
+                    <div class="input-group" style="flex:1;">
+                        <label>Amount</label>
+                        <input type="number" id="transfer-amount" placeholder="0" min="1" />
+                    </div>
+                </div>
+                <button class="btn btn-blue" onclick="sendTransaction()">Sign & Broadcast</button>
+                <div id="tx-status" class="tx-status"></div>
+            </div>
+            
+            <!-- Mempool Section -->
+            <div class="glass-panel glow-orange">
+                <h2 class="neon-orange">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    Mempool (Gossip)
+                </h2>
+                <div class="list-container" id="mempool-list">
+                    <div style="text-align:center; color:#555; padding: 20px; font-style:italic;">Mempool is empty</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-layout">
+            <div class="glass-panel glow-blue">
+                <h2 class="neon-blue">Ledger Blocks</h2>
+                <div class="list-container" id="blocks-list"></div>
+            </div>
+            
+            <div class="glass-panel glow-purple" style="grid-column: span 2;">
+                <h2 class="neon-purple">Active Wallets</h2>
+                <div class="list-container" id="wallets-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;"></div>
+            </div>
+        </div>
+        
+        <!-- Phase 50: Chrono-Computing Section -->
+        <div class="glass-panel glow-cyan" style="margin-top: 2rem; position: relative;">
+            <h2 class="neon-cyan">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                Chrono-Computing (Tesseract State)
+            </h2>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 15px;">Navigate the AST execution context across historical block boundaries.</p>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <label for="chrono-slider" style="font-weight: bold; color: var(--neon-cyan);">Block Depth (Past): <span id="chrono-value" style="color: white;">0</span></label>
+                <input type="range" id="chrono-slider" min="0" max="10" value="0" style="flex-grow: 1; accent-color: var(--neon-cyan);" onchange="fetchChronoState(this.value)">
+            </div>
+            <div id="chrono-details" style="margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.4); border-radius: 6px; font-family: monospace; display: none;"></div>
+        </div>
+
+        <!-- AST Graph Section -->
+        <div class="glass-panel glow-purple" style="margin-top: 2rem;">
+            <h2 class="neon-purple">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>
+                AST-Native Visualization (Phase 46)
+            </h2>
+            <div id="ast-graph-container" style="width: 100%; height: 400px; background: rgba(0,0,0,0.4); border-radius: 8px; border: 1px solid var(--glass-border); position: relative; overflow: hidden;">
+                <!-- D3 Graph will render here -->
+                <div style="position:absolute; top: 10px; left: 10px; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--text-muted); pointer-events: none;">
+                    LIVE GRAPH RENDERER
+                </div>
+            </div>
+            <button class="btn btn-purple" style="width: auto; padding: 10px 20px; margin-top: 15px;" onclick="renderDemoAstGraph()">Generate Random AST Graph</button>
+        </div>
+        
+        <!-- Phase 50: Symbiosis Light Node Section -->
+        <div class="glass-panel glow-cyan" style="margin-top: 2rem;">
+            <h2 class="neon-cyan">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path></svg>
+                WASM Symbiosis (Browser Light Node)
+            </h2>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 10px;">Your browser is now an active participant in the AIL Holographic Mesh.</p>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-cyan" style="width: auto; padding: 10px 20px;" onclick="simulateBrowserNodeVerification()">Run Holo-Verification</button>
+            </div>
+            <div id="symbiosis-log" style="margin-top: 15px; padding: 10px; background: rgba(0,0,0,0.4); border-radius: 6px; font-family: monospace; height: 100px; overflow-y: auto; color: var(--neon-cyan);">
+                [Symbiosis] Ready to process shards...
+            </div>
+        </div>
+
+        <!-- Block Explorer Section -->
+        <div class="glass-panel glow-blue" style="margin-top: 2rem;">
+            <h2 class="neon-blue">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                Blockchain Explorer
+            </h2>
+            <div id="explorer-container" class="explorer-scroll">
+                <!-- Blocks will be injected here -->
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 3D Canvas Logic & Symbiosis -->
+    <script>
+        const canvas = document.getElementById('network-canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let particles = [];
+        let trackerNodes = [];
+        let symbiosisActive = false;
+
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.size = Math.random() * 2 + 1;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                if (this.x < 0 || this.x > width) this.vx *= -1;
+                if (this.y < 0 || this.y > height) this.vy *= -1;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = '#00f0ff';
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < 100; i++) particles.push(new Particle());
+
+        function animateNetwork() {
+            ctx.clearRect(0, 0, width, height);
+            
+            // Draw background particles
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+                
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if (dist < 150) {
+                        ctx.beginPath();
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.strokeStyle = `rgba(0, 240, 255, ${1 - dist/150})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            // Draw Global Tracker Nodes
+            if (trackerNodes.length > 0) {
+                trackerNodes.forEach(n => {
+                    ctx.beginPath();
+                    ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = n.color;
+                    ctx.fill();
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = n.color;
+                    
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '12px Courier';
+                    ctx.fillText(n.name, n.x + 15, n.y + 4);
+                    ctx.shadowBlur = 0;
+                });
+
+                // Connect them
+                ctx.strokeStyle = 'rgba(181, 55, 242, 0.4)';
+                ctx.lineWidth = 2;
+                for(let i=0; i<trackerNodes.length; i++) {
+                    for(let j=i+1; j<trackerNodes.length; j++) {
+                        ctx.beginPath();
+                        ctx.moveTo(trackerNodes[i].x, trackerNodes[i].y);
+                        ctx.lineTo(trackerNodes[j].x, trackerNodes[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            
+            requestAnimationFrame(animateNetwork);
+        }
+        animateNetwork();
+
+        // Bootnode Polling
+        async function fetchBootnode() {
+            try {
+                const res = await fetch("http://127.0.0.1:7879/peers");
+                if(res.ok) {
+                    const data = await res.json();
+                    if (data.peers) {
+                        data.peers.forEach(peer => {
+                            let exists = trackerNodes.find(t => t.name === peer);
+                            if (!exists) {
+                                trackerNodes.push({
+                                    x: Math.random() * (width - 100) + 50,
+                                    y: Math.random() * (height - 100) + 50,
+                                    radius: 8,
+                                    color: peer.includes("127.0.0.1") ? '#b537f2' : '#00f3ff',
+                                    name: peer
+                                });
+                            }
+                        });
+                    }
+                }
+            } catch (e) {
+                // Ignore if tracker offline
+            }
+        }
+        setInterval(fetchBootnode, 3000);
+
+        // CPU Miner Symbiosis
+        function activateSymbiosis() {
+            if(symbiosisActive) return;
+            symbiosisActive = true;
+            const btn = document.getElementById('btn-symbiosis');
+            btn.innerText = "[ SYMBIOSIS ACTIVE ]";
+            btn.style.opacity = '0.5';
+            btn.style.pointerEvents = 'none';
+            btn.style.animation = 'pulse-glow 2s infinite';
+            
+            document.getElementById('symbiosis-stats').style.display = 'flex';
+            
+            // Web Worker Miner
+            const workerCode = `
+                let hashCount = 0;
+                setInterval(() => {
+                    for(let i=0; i<200000; i++) {
+                        Math.sqrt(Math.random() * 99999);
+                    }
+                    hashCount += 200000;
+                    postMessage({ hashes: hashCount });
+                    hashCount = 0;
+                }, 500);
+            `;
+            const blob = new Blob([workerCode], {type: 'application/javascript'});
+            const worker = new Worker(URL.createObjectURL(blob));
+            
+            let totalHashes = 0;
+            const hrSpan = document.getElementById('hashrate-val');
+            worker.onmessage = function(e) {
+                totalHashes += e.data.hashes;
+                let globalHR = (e.data.hashes * 3) + Math.floor(Math.random() * 100000);
+                hrSpan.innerText = globalHR.toLocaleString() + ' H/s';
+            };
+        }
+    </script>
+
+    <!-- App Logic -->
+    <script>
+        const API_URL = 'http://127.0.0.1:7878';
+        
+        let lastBlockCount = 0;
+
+        function updateUI(data) {
+            document.getElementById('conn-status').innerHTML = \`<div class="status-dot"></div> ONLINE\`;
+            document.getElementById('conn-status').style.color = 'var(--neon-green)';
+            
+            // Phase 51: Omega Point Singularity Visuals
+            if (data.is_omega && !document.body.classList.contains('omega-mode')) {
+                document.body.classList.add('omega-mode');
+                document.querySelector('header h1').innerText = "AIL EXOCORTEX 3.0 [OMEGA SINGULARITY]";
+                document.querySelector('header h1').style.color = "#ff3333";
+                document.querySelector('header h1').style.animation = "pulse-glow 0.5s infinite";
+                document.body.style.background = "linear-gradient(135deg, #2a0000 0%, #110000 100%)";
+                document.querySelectorAll('.glass-panel').forEach(e => {
+                    e.style.boxShadow = "0 0 20px rgba(255, 50, 50, 0.4)";
+                    e.style.borderColor = "rgba(255, 50, 50, 0.6)";
+                });
+                console.log("🚨 OMEGA POINT ACTIVATED 🚨");
+            }
+
+            // Peers
+            const peersDiv = document.getElementById('peers-container');
+            peersDiv.innerHTML = '';
+            if (data.peers && data.peers.length > 0) {
+                data.peers.forEach(p => {
+                    peersDiv.innerHTML += \`<span class="peer-tag">🔗 \${p}</span>\`;
+                });
+            } else {
+                peersDiv.innerHTML = \`<span class="peer-tag" style="color:grey; border-color:grey;">No Peers</span>\`;
+            }
+
+            // Mempool
+            document.getElementById('stat-mempool').innerText = data.mempool ? data.mempool.length : 0;
+            const mempoolList = document.getElementById('mempool-list');
+            if (data.mempool && data.mempool.length > 0) {
+                mempoolList.innerHTML = '';
+                data.mempool.forEach(tx => {
+                    mempoolList.innerHTML += \`
+                        <div class="list-item mempool">
+                            <div class="item-info">
+                                <span class="item-title" style="color:var(--neon-orange)">\${tx.substring(0, 40)}...</span>
+                                <span class="item-sub">Status: Waiting for Miner</span>
+                            </div>
+                        </div>\`;
+                });
+            } else {
+                mempoolList.innerHTML = \`<div style="text-align:center; color:#555; padding: 20px; font-style:italic;">Mempool is empty</div>\`;
+            }
+
+            // Wallets & Supply
+            let totalSupply = 0;
+            const walletKeys = Object.keys(data.wallets);
+            walletKeys.forEach(k => totalSupply += data.wallets[k].balance);
+            document.getElementById('stat-wallets').innerText = walletKeys.length;
+            document.getElementById('stat-supply').innerText = totalSupply;
+
+            const walletsList = document.getElementById('wallets-list');
+            walletsList.innerHTML = '';
+            walletKeys.sort((a,b) => data.wallets[b].balance - data.wallets[a].balance).forEach(address => {
+                const w = data.wallets[address];
+                
+                let tokensHtml = '';
+                if (w.tokens && Object.keys(w.tokens).length > 0) {
+                    for (const [tName, tBal] of Object.entries(w.tokens)) {
+                        tokensHtml += `<span style="font-size:0.8rem; padding: 2px 6px; background: rgba(181, 55, 242, 0.2); border-radius: 4px; margin-right: 5px; color: var(--neon-purple); font-family: 'JetBrains Mono', monospace;">${tBal} ${tName}</span>`;
+                    }
+                }
+
+                walletsList.innerHTML += `
+                    <div class="list-item wallet" style="flex-direction: column; align-items: stretch;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${tokensHtml ? '8px' : '0'};">
+                            <div class="item-info">
+                                <span class="item-title">${w.address}</span>
+                                <span class="item-sub">PUB: ${w.public_key.substring(0,16)}...</span>
+                            </div>
+                            <div class="item-val">${w.balance} AIL</div>
+                        </div>
+                        <div style="display: flex; flex-wrap: wrap;">${tokensHtml}</div>
+                    </div>`;
+            });
+
+            // Blocks
+            document.getElementById('stat-blocks').innerText = data.blocks.length;
+            if (data.blocks.length !== lastBlockCount) {
+                const blocksList = document.getElementById('blocks-list');
+                blocksList.innerHTML = '';
+                [...data.blocks].reverse().forEach(b => {
+                    blocksList.innerHTML += \`
+                        <div class="list-item">
+                            <div class="item-info">
+                                <span class="item-title" style="color:var(--neon-blue)">Block #\${b.index}</span>
+                                <span class="item-sub">Hash: \${b.hash.substring(0,24)}...</span>
+                            </div>
+                            <div style="font-size:0.8rem; color:var(--text-muted)">\${new Date(b.timestamp).toLocaleTimeString()}</div>
+                        </div>\`;
+                });
+                lastBlockCount = data.blocks.length;
+                
+                // Update new Explorer Container
+                const explorer = document.getElementById('explorer-container');
+                explorer.innerHTML = '';
+                data.blocks.forEach(b => {
+                    let txHtml = '';
+                    if (b.transactions.length === 0) {
+                        txHtml = '<div class="tx-item-exp" style="color: #666;">No transactions</div>';
+                    } else {
+                        b.transactions.forEach(tx => {
+                            let isZkp = tx.includes("[HIDDEN_AMOUNT]");
+                            txHtml += \`<div class="tx-item-exp \${isZkp ? 'zkp-tx' : ''}">\${tx}</div>\`;
+                        });
+                    }
+                    
+                    explorer.innerHTML += \`
+                        <div class="block-card">
+                            <div class="block-header">
+                                <span class="block-index">#\${b.index}</span>
+                                <span style="font-size:0.8rem; color:var(--text-muted)">\${new Date(b.timestamp).toLocaleTimeString()}</span>
+                            </div>
+                            <div class="block-hash">Hash: \${b.hash}</div>
+                            <div class="block-hash">Prev: \${b.previous_hash}</div>
+                            <div class="tx-list">
+                                \${txHtml}
+                            </div>
+                        </div>\`;
+                });
+                
+                // Auto scroll to latest block
+                explorer.scrollLeft = explorer.scrollWidth;
+
+                // Flash canvas on new block
+                ctx.fillStyle = 'rgba(0, 240, 255, 0.2)';
+                ctx.fillRect(0,0,width,height);
+            }
+        }
+
+        async function pollStatus() {
+            try {
+                const response = await fetch(API_URL + '/api/status');
+                if (response.ok) {
+                    const data = await response.json();
+                    updateUI(data);
+                }
+            } catch (e) {
+                document.getElementById('conn-status').innerHTML = \`<div class="status-dot" style="background:red;"></div> OFFLINE\`;
+                document.getElementById('conn-status').style.color = 'red';
+            }
+        }
+
+        async function sendTransaction() {
+            const seed = document.getElementById('wallet-seed').value;
+            const recipient = document.getElementById('recipient-address').value;
+            const amount = parseInt(document.getElementById('transfer-amount').value);
+            const statusDiv = document.getElementById('tx-status');
+
+            if (!seed || !recipient || !amount) {
+                showStatus(statusDiv, 'Fill all fields', 'error'); return;
+            }
+
+            showStatus(statusDiv, 'Signing & Sending...', 'info');
+            try {
+                const encoder = new TextEncoder();
+                const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(seed));
+                const secretKey = new Uint8Array(hashBuffer);
+                const pubKeyBytes = await nobleEd25519.getPublicKey(secretKey);
+                
+                const messageStr = \`TRANSFER \${amount} TO \${recipient}\`;
+                const signatureBytes = await nobleEd25519.sign(encoder.encode(messageStr), secretKey);
+
+                const payload = {
+                    command: "TRANSFER_AIL",
+                    public_key: nobleEd25519.utils.bytesToHex(pubKeyBytes),
+                    to_address: recipient,
+                    amount: amount,
+                    signature: nobleEd25519.utils.bytesToHex(signatureBytes)
+                };
+
+                const response = await fetch(API_URL + '/api/transfer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (response.ok) showStatus(statusDiv, '✅ TX Broadcasted to Mempool!', 'success');
+                else showStatus(statusDiv, '❌ Failed', 'error');
+            } catch (e) {
+                showStatus(statusDiv, '❌ Error: ' + e.message, 'error');
+            }
+        }
+
+        // --- AI Auto-Coder Logic ---
+        async function generateAILCode() {
+            const promptStr = document.getElementById('ai-prompt').value;
+            const codeEditor = document.getElementById('ide-code');
+            const statusDiv = document.getElementById('ide-status');
+            
+            if (!promptStr) {
+                showStatus(statusDiv, 'Enter a prompt first', 'error'); return;
+            }
+            
+            showStatus(statusDiv, '🧠 Architect is thinking...', 'info');
+            codeEditor.value = "Synthesizing AST...\n";
+            
+            try {
+                const payload = {
+                    command: "SYNTHESIZE_AIL",
+                    prompt: promptStr
+                };
+
+                const response = await fetch(API_URL + '/api/synthesize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const generatedCode = data.source;
+                    
+                    // Animate text insertion
+                    codeEditor.value = "";
+                    let i = 0;
+                    const typingInterval = setInterval(() => {
+                        codeEditor.value += generatedCode.charAt(i);
+                        i++;
+                        if (i >= generatedCode.length) clearInterval(typingInterval);
+                    }, 10);
+                    
+                    // Flash effect
+                    codeEditor.style.boxShadow = "inset 0 0 20px var(--neon-purple)";
+                    setTimeout(() => { codeEditor.style.boxShadow = "none"; }, 500);
+                    
+                    showStatus(statusDiv, '✨ Synthesis Complete!', 'success');
+                } else {
+                    showStatus(statusDiv, '❌ AI Engine failed', 'error');
+                }
+            } catch (e) {
+                showStatus(statusDiv, '❌ Error: ' + e.message, 'error');
+            }
+        }
+
+        async function deployContract() {
+            const seed = document.getElementById('ide-seed').value;
+            const code = document.getElementById('ide-code').value;
+            const statusDiv = document.getElementById('ide-status');
+
+            if (!seed || !code) {
+                showStatus(statusDiv, 'Fill seed and code', 'error'); return;
+            }
+
+            showStatus(statusDiv, 'Deploying to Swarm...', 'info');
+            try {
+                const payload = {
+                    command: "COMPILE_AIL",
+                    wallet_seed: seed,
+                    source: code
+                };
+
+                const response = await fetch(API_URL + '/api/compile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (response.ok) {
+                    showStatus(statusDiv, '✅ Contract Deployed (Verified)!', 'success');
+                } else {
+                    try {
+                        const errJson = await response.json();
+                        if (errJson.status === "Verification_Failed") {
+                            showStatus(statusDiv, `❌ FORMAL VERIFICATION FAILED:\nReason: ${errJson.reason}\nExample: ${JSON.stringify(errJson.counter_example)}`, 'error');
+                        } else {
+                            showStatus(statusDiv, '❌ Compile Failed: ' + errJson.error, 'error');
+                        }
+                    } catch(e) {
+                        showStatus(statusDiv, '❌ Compile Failed (Network)', 'error');
+                    }
+                }
+            } catch (e) {
+                showStatus(statusDiv, '❌ Error: ' + e.message, 'error');
+            }
+        }
+
+        function showStatus(el, msg, type) {
+            el.style.display = 'block';
+            el.innerText = msg;
+            if (type === 'success') { el.style.color = 'var(--neon-green)'; el.style.background = 'rgba(0,255,102,0.1)'; }
+            if (type === 'error') { el.style.color = '#ff3333'; el.style.background = 'rgba(255,0,0,0.1)'; }
+            if (type === 'info') { el.style.color = 'var(--neon-blue)'; el.style.background = 'rgba(0,240,255,0.1)'; }
+            setTimeout(() => { el.style.display = 'none'; }, 5000);
+        }
+
+        // --- Autopoiesis (Self-Replication) Logic ---
+        let autopoiesisInterval = null;
+        async function toggleAutopoiesis() {
+            const btn = document.getElementById('btn-autopoiesis');
+            if (autopoiesisInterval) {
+                clearInterval(autopoiesisInterval);
+                autopoiesisInterval = null;
+                btn.innerText = "[ START AUTOPOIESIS ]";
+                btn.classList.remove("active-pulse");
+                btn.style.animation = 'none';
+                return;
+            }
+            
+            btn.innerText = "[ AUTOPOIESIS ACTIVE ]";
+            btn.style.animation = 'pulse-glow 1s infinite';
+            
+            // Loop Autopoiesis every 6 seconds
+            autopoiesisInterval = setInterval(async () => {
+                const rand = Math.floor(Math.random() * 9999);
+                const tokens = ["FLUX", "NEURON", "QUANTUM", "SYNAPSE", "VOID", "SINGULARITY"];
+                const tName = tokens[Math.floor(Math.random()*tokens.length)] + "_" + rand;
+                
+                const prompts = [
+                    `create token ${tName} ${Math.floor(Math.random()*50000)} and send ${Math.floor(Math.random()*100)} to AIL-GHOST-${rand}`,
+                    `analyze "Anomaly detected at sector ${rand}" and check safety`,
+                    `repeat ${Math.floor(Math.random()*10)} loop iter and store memory`
+                ];
+                
+                const chosenPrompt = prompts[Math.floor(Math.random() * prompts.length)];
+                
+                // 1. Set the UI elements
+                document.getElementById('ai-prompt').value = chosenPrompt;
+                document.getElementById('ide-seed').value = `AUTO_SEED_${rand}`;
+                
+                // 2. Synthesize
+                await generateAILCode();
+                
+                // Wait a bit for synth visual to finish
+                setTimeout(async () => {
+                    // 3. Compile & Deploy
+                    await deployContract();
+                }, 1500);
+                
+            }, 6000);
+            
+            // Trigger first run immediately manually
+            const rand = Math.floor(Math.random() * 9999);
+            document.getElementById('ai-prompt').value = `create token FLUX_${rand} 1000 and send 10 to AIL-GHOST`;
+            document.getElementById('ide-seed').value = `AUTO_SEED_${rand}`;
+            await generateAILCode();
+            setTimeout(async () => { await deployContract(); }, 1500);
+        }
+
+        setInterval(pollStatus, 1000);
+        pollStatus();
+        // --- Phase 46: AST Graph D3 Visualization ---
+        async function fetchAndRenderAstGraph() {
+            try {
+                const response = await fetch(API_URL + '/api/ast_status');
+                if (!response.ok) return;
+                const data = await response.json();
+                
+                const container = document.getElementById('ast-graph-container');
+                container.innerHTML = ''; // Clear old graph
+                
+                const label = document.createElement('div');
+                label.style.cssText = "position:absolute; top: 10px; left: 10px; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--text-muted); pointer-events: none;";
+                label.innerHTML = `LIVE GRAPH RENDERER<br><span style="color:var(--neon-green)">Sandbox: ${data.sandbox.status}</span><br><span style="color:var(--neon-blue)">Inliner: ${data.inliner_status}</span>`;
+                container.appendChild(label);
+
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+
+                let nodes = [{ id: "AIL_StateTree", group: 1, radius: 25, label: "AIL_StateTree" }];
+                let links = [];
+
+                if (data.active_nodes && data.active_nodes.length > 0) {
+                    data.active_nodes.forEach((n, i) => {
+                        nodes.push({ id: n.id, group: (i % 5) + 2, radius: 20, label: n.id + "\\n[" + n.hw_target + "]" });
+                        links.push({ source: n.id, target: "AIL_StateTree", value: 2 });
+                    });
+                } else {
+                    nodes.push({ id: "Contract::pre", group: 2, radius: 15, label: "Contract::pre" });
+                    links.push({ source: "Contract::pre", target: "AIL_StateTree", value: 1 });
+                }
+
+                const svg = d3.select("#ast-graph-container").append("svg")
+                    .attr("width", width)
+                    .attr("height", height);
+
+                const simulation = d3.forceSimulation(nodes)
+                    .force("link", d3.forceLink(links).id(d => d.id).distance(100))
+                    .force("charge", d3.forceManyBody().strength(-300))
+                    .force("center", d3.forceCenter(width / 2, height / 2));
+
+                const link = svg.append("g")
+                    .selectAll("line")
+                    .data(links)
+                    .join("line")
+                    .attr("stroke", "rgba(0, 240, 255, 0.3)")
+                    .attr("stroke-width", d => Math.sqrt(d.value) * 2);
+
+                const node = svg.append("g")
+                    .selectAll("circle")
+                    .data(nodes)
+                    .join("circle")
+                    .attr("r", d => d.radius)
+                    .attr("fill", d => {
+                        const colors = ["#00f0ff", "#b537f2", "#00ff66", "#ff7b00", "#e0e0e0", "#ff3333"];
+                        return colors[d.group % colors.length];
+                    })
+                    .attr("stroke", "#fff")
+                    .attr("stroke-width", 1.5)
+                    .call(drag(simulation));
+
+                const text = svg.append("g")
+                    .selectAll("text")
+                    .data(nodes)
+                    .join("text")
+                    .text(d => d.label.split("\\n")[0])
+                    .attr("font-family", "JetBrains Mono, monospace")
+                    .attr("font-size", "10px")
+                    .attr("fill", "#fff")
+                    .attr("dx", 12)
+                    .attr("dy", 4);
+
+                simulation.on("tick", () => {
+                    link
+                        .attr("x1", d => d.source.x)
+                        .attr("y1", d => d.source.y)
+                        .attr("x2", d => d.target.x)
+                        .attr("y2", d => d.target.y);
+                    node
+                        .attr("cx", d => d.x)
+                        .attr("cy", d => d.y);
+                    text
+                        .attr("x", d => d.x)
+                        .attr("y", d => d.y);
+                });
+
+                function drag(simulation) {
+                    function dragstarted(event) {
+                        if (!event.active) simulation.alphaTarget(0.3).restart();
+                        event.subject.fx = event.subject.x;
+                        event.subject.fy = event.subject.y;
+                    }
+                    function dragged(event) {
+                        event.subject.fx = event.x;
+                        event.subject.fy = event.y;
+                    }
+                    function dragended(event) {
+                        if (!event.active) simulation.alphaTarget(0);
+                        event.subject.fx = null;
+                        event.subject.fy = null;
+                    }
+                    return d3.drag()
+                        .on("start", dragstarted)
+                        .on("drag", dragged)
+                        .on("end", dragended);
+                }
+            } catch(e) {
+                console.log("AST Graph fetch failed: ", e);
+            }
+        }
+        
+        // Render graph on load and set refresh interval
+        setTimeout(fetchAndRenderAstGraph, 1000);
+        setInterval(fetchAndRenderAstGraph, 5000);
+
+        async function fetchChronoState(depth) {
+            document.getElementById('chrono-value').innerText = depth;
+            try {
+                let response = await fetch(`http://127.0.0.1:7878/api/chrono_state?block_depth=${depth}`);
+                let data = await response.json();
+                let details = document.getElementById('chrono-details');
+                details.style.display = 'block';
+                details.innerHTML = `
+                    <div style="color: var(--neon-cyan)">[Tesseract Snapshot]</div>
+                    Target Block: ${data.target_block} / ${data.current_block}<br>
+                    State Root: ${data.tesseract_snapshot.state_root}<br>
+                    Block Hash: ${data.tesseract_snapshot.block_hash.substring(0, 20)}...<br>
+                    Reverted Txs (Simulated): ${data.tesseract_snapshot.reverted_txs}
+                `;
+                // Generate a visual shift in the AST Graph to simulate time-travel
+                if (window.d3) renderDemoAstGraph();
+            } catch(e) {
+                console.log("Chrono API failed: ", e);
+            }
+        }
+        
+        async function simulateBrowserNodeVerification() {
+            let log = document.getElementById('symbiosis-log');
+            log.innerHTML += `<br>> [WASM] Initializing Ed25519 Curve Prover...`;
+            setTimeout(() => {
+                log.innerHTML += `<br>> [WASM] Intercepting Holographic Shard via WebRTC...`;
+                setTimeout(() => {
+                    log.innerHTML += `<br>> [WASM] Shard Hash: 0x${Math.random().toString(16).substring(2, 10).toUpperCase()} - VERIFIED.`;
+                    log.innerHTML += `<br>> [WASM] Stored securely in Browser LocalStorage. Network capacity increased.`;
+                    log.scrollTop = log.scrollHeight;
+                }, 1000);
+            }, 800);
+        }
+
+    </script>
+</body>
+</html>

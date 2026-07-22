@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AIL Wallet</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@noble/ed25519@2.0.0/lib/index.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #050510;
+            --neon-blue: #00f0ff;
+            --neon-purple: #b537f2;
+            --glass-bg: rgba(20, 25, 40, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: radial-gradient(circle at center, #1a1a2e 0%, var(--bg-dark) 100%);
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .wallet-container {
+            width: 360px;
+            height: 600px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            box-shadow: 0 0 40px rgba(0, 240, 255, 0.1), inset 0 0 20px rgba(181, 55, 242, 0.05);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid var(--glass-border);
+            background: rgba(0, 0, 0, 0.2);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 1.2rem;
+            font-weight: 800;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 1px;
+        }
+
+        /* Screens */
+        .screen {
+            flex: 1;
+            padding: 20px;
+            display: none;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .screen.active {
+            display: flex;
+        }
+
+        /* Inputs & Buttons */
+        .input-group { margin-bottom: 15px; }
+        .input-group label {
+            display: block; font-size: 0.8rem; color: #aaa; margin-bottom: 5px;
+        }
+        input[type="text"], input[type="password"], input[type="number"] {
+            width: 100%; padding: 12px; box-sizing: border-box;
+            background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px; color: #fff; font-family: 'JetBrains Mono', monospace;
+            outline: none; transition: border-color 0.3s;
+        }
+        input:focus { border-color: var(--neon-blue); }
+
+        .btn {
+            width: 100%; padding: 12px; border: none; border-radius: 8px;
+            font-weight: 600; cursor: pointer; transition: all 0.3s;
+            text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem;
+            margin-top: 10px;
+        }
+        .btn-primary {
+            background: linear-gradient(45deg, var(--neon-blue), #0088ff); color: #000;
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+        }
+        .btn-primary:hover { box-shadow: 0 0 25px rgba(0, 240, 255, 0.8); }
+        
+        .btn-secondary {
+            background: transparent; border: 1px solid var(--neon-purple); color: var(--neon-purple);
+            box-shadow: inset 0 0 10px rgba(181, 55, 242, 0.2);
+        }
+        .btn-secondary:hover { background: rgba(181, 55, 242, 0.1); }
+
+        /* Home Screen specific */
+        .balance-card {
+            background: linear-gradient(135deg, rgba(0,240,255,0.1), rgba(181,55,242,0.1));
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+            padding: 20px; text-align: center; margin-bottom: 20px;
+        }
+        .balance-val {
+            font-size: 2.5rem; font-weight: 800; font-family: 'JetBrains Mono', monospace;
+            margin: 10px 0; color: var(--neon-blue); text-shadow: 0 0 10px rgba(0,240,255,0.5);
+        }
+        .pub-key {
+            font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: #888;
+            background: rgba(0,0,0,0.3); padding: 5px; border-radius: 4px; word-break: break-all;
+        }
+
+        .tokens-list {
+            flex: 1; overflow-y: auto;
+        }
+        .token-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px; background: rgba(0,0,0,0.3); border-radius: 8px; margin-bottom: 8px;
+            border-left: 3px solid var(--neon-purple);
+        }
+        .token-name { font-weight: 600; font-size: 0.9rem; }
+        .token-bal { font-family: 'JetBrains Mono', monospace; color: var(--neon-purple); }
+
+        /* Navigation */
+        .nav-bar {
+            display: flex; background: rgba(0,0,0,0.4); border-top: 1px solid var(--glass-border);
+        }
+        .nav-btn {
+            flex: 1; padding: 15px; text-align: center; cursor: pointer;
+            color: #888; font-size: 0.9rem; transition: color 0.3s;
+        }
+        .nav-btn.active { color: var(--neon-blue); border-top: 2px solid var(--neon-blue); }
+
+        /* Toggle */
+        .toggle-container {
+            display: flex; justify-content: space-between; align-items: center;
+            margin: 15px 0; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px;
+        }
+        .toggle-switch {
+            position: relative; width: 40px; height: 20px; background: #333;
+            border-radius: 20px; cursor: pointer; transition: 0.3s;
+        }
+        .toggle-switch::after {
+            content: ''; position: absolute; width: 16px; height: 16px;
+            border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: 0.3s;
+        }
+        .toggle-switch.on { background: var(--neon-purple); box-shadow: 0 0 10px var(--neon-purple); }
+        .toggle-switch.on::after { left: 22px; }
+
+        /* Status notification */
+        .status-toast {
+            position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 20px;
+            font-size: 0.8rem; border: 1px solid var(--neon-blue); color: #fff;
+            display: none; white-space: nowrap; z-index: 100;
+            box-shadow: 0 0 15px rgba(0,240,255,0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="wallet-container">
+        <div class="header">
+            <h1>AIL WALLET</h1>
+        </div>
+
+        <!-- Login Screen -->
+        <div id="screen-login" class="screen active" style="justify-content: center;">
+            <div style="text-align: center; margin-bottom: 30px;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--neon-blue)" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <h2 style="margin: 10px 0 5px 0;">Welcome</h2>
+                <p style="color: #888; font-size: 0.8rem;">Enter your seed phrase to connect to AetherSwarm</p>
+            </div>
+            <div class="input-group">
+                <label>Seed Phrase</label>
+                <input type="password" id="login-seed" placeholder="e.g. AI_SEED_1" value="AI_SEED_1">
+            </div>
+            <button class="btn btn-primary" onclick="login()">Connect Wallet</button>
+            <button class="btn btn-secondary" onclick="generateSeed()">Generate New</button>
+        </div>
+
+        <!-- Home Screen -->
+        <div id="screen-home" class="screen">
+            <div class="balance-card">
+                <div style="font-size: 0.8rem; color: #aaa;">Total Balance</div>
+                <div class="balance-val" id="ui-balance">0.0</div>
+                <div style="font-size: 0.8rem; color: var(--neon-blue);">AIL</div>
+                <div class="pub-key" id="ui-pubkey" onclick="copyAddress()" style="cursor:pointer; margin-top:10px;">Loading...</div>
+            </div>
+            <h3 style="font-size: 0.9rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 5px;">AIL-20 Tokens</h3>
+            <div class="tokens-list" id="ui-tokens">
+                <div style="text-align:center; color:#666; font-size:0.8rem; margin-top:20px;">No custom tokens</div>
+            </div>
+        </div>
+
+        <!-- Send Screen -->
+        <div id="screen-send" class="screen">
+            <h2 style="margin-top:0;">Send Funds</h2>
+            <div class="input-group">
+                <label>Recipient Address (AIL-...)</label>
+                <input type="text" id="send-to" placeholder="AIL-ABCD...">
+            </div>
+            <div class="input-group">
+                <label>Token Name</label>
+                <input type="text" id="send-token" placeholder="AIL" value="AIL">
+            </div>
+            <div class="input-group">
+                <label>Amount</label>
+                <input type="number" id="send-amount" placeholder="0.0">
+            </div>
+            
+            <div class="toggle-container">
+                <div>
+                    <div style="font-size: 0.9rem; font-weight: 600; color: var(--neon-purple);">ZKP Blind Transfer</div>
+                    <div style="font-size: 0.7rem; color: #888;">Hide amount via Zero-Knowledge</div>
+                </div>
+                <div class="toggle-switch" id="zkp-toggle" onclick="this.classList.toggle('on')"></div>
+            </div>
+
+            <button class="btn btn-primary" onclick="sendTx()" style="margin-top: auto;">Sign & Send</button>
+        </div>
+
+        <!-- Navigation (Hidden on Login) -->
+        <div class="nav-bar" id="nav-bar" style="display: none;">
+            <div class="nav-btn active" id="nav-home" onclick="switchTab('home')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                <div style="font-size:0.7rem; margin-top:3px;">Home</div>
+            </div>
+            <div class="nav-btn" id="nav-send" onclick="switchTab('send')">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                <div style="font-size:0.7rem; margin-top:3px;">Send</div>
+            </div>
+        </div>
+
+        <!-- Toast -->
+        <div id="toast" class="status-toast">Transaction Sent!</div>
+    </div>
+
+    <script>
+        const API_URL = 'http://127.0.0.1:7878';
+        let currentSeed = null;
+        let currentPubKeyHex = null;
+        let currentAddress = null;
+
+        function showToast(msg, isError=false) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.style.borderColor = isError ? '#ff3366' : 'var(--neon-blue)';
+            t.style.boxShadow = isError ? '0 0 15px rgba(255,51,102,0.3)' : '0 0 15px rgba(0,240,255,0.3)';
+            t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 3000);
+        }
+
+        async function getKeys(seed) {
+            const encoder = new TextEncoder();
+            const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(seed));
+            const secretKey = new Uint8Array(hashBuffer);
+            const pubKeyBytes = await nobleEd25519.getPublicKey(secretKey);
+            const pubKeyHex = nobleEd25519.utils.bytesToHex(pubKeyBytes);
+            // Simple address derivation (mock)
+            const addrHash = await crypto.subtle.digest('SHA-256', pubKeyBytes);
+            const addrHex = nobleEd25519.utils.bytesToHex(new Uint8Array(addrHash));
+            const address = "AIL-" + addrHex.substring(0, 16).toUpperCase();
+            return { secretKey, pubKeyHex, address };
+        }
+
+        async function login() {
+            const seed = document.getElementById('login-seed').value;
+            if (!seed) return showToast("Enter seed phrase", true);
+            
+            currentSeed = seed;
+            const keys = await getKeys(seed);
+            currentPubKeyHex = keys.pubKeyHex;
+            currentAddress = keys.address;
+
+            document.getElementById('ui-pubkey').innerText = currentAddress;
+            
+            document.getElementById('screen-login').classList.remove('active');
+            document.getElementById('screen-home').classList.add('active');
+            document.getElementById('nav-bar').style.display = 'flex';
+            
+            pollBalance();
+            setInterval(pollBalance, 2000);
+        }
+
+        function generateSeed() {
+            document.getElementById('login-seed').value = "AI_SEED_" + Math.floor(Math.random() * 1000000);
+        }
+
+        function copyAddress() {
+            navigator.clipboard.writeText(currentAddress);
+            showToast("Address copied!");
+        }
+
+        function switchTab(tab) {
+            document.getElementById('screen-home').classList.remove('active');
+            document.getElementById('screen-send').classList.remove('active');
+            document.getElementById('nav-home').classList.remove('active');
+            document.getElementById('nav-send').classList.remove('active');
+
+            document.getElementById('screen-' + tab).classList.add('active');
+            document.getElementById('nav-' + tab).classList.add('active');
+        }
+
+        async function pollBalance() {
+            if (!currentAddress) return;
+            try {
+                const res = await fetch(API_URL + '/api/status');
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                const wallet = data.wallets[currentAddress];
+                if (wallet) {
+                    document.getElementById('ui-balance').innerText = wallet.balance;
+                    
+                    const tokensList = document.getElementById('ui-tokens');
+                    if (wallet.tokens && Object.keys(wallet.tokens).length > 0) {
+                        tokensList.innerHTML = '';
+                        for (const [tName, tBal] of Object.entries(wallet.tokens)) {
+                            tokensList.innerHTML += \`
+                                <div class="token-item">
+                                    <div class="token-name">\${tName}</div>
+                                    <div class="token-bal">\${tBal}</div>
+                                </div>
+                            \`;
+                        }
+                    } else {
+                        tokensList.innerHTML = '<div style="text-align:center; color:#666; font-size:0.8rem; margin-top:20px;">No custom tokens</div>';
+                    }
+                } else {
+                    document.getElementById('ui-balance').innerText = "0.0";
+                }
+            } catch (e) {
+                console.error("Node offline");
+            }
+        }
+
+        async function sendTx() {
+            const to = document.getElementById('send-to').value;
+            const amount = parseInt(document.getElementById('send-amount').value);
+            const token = document.getElementById('send-token').value.toUpperCase();
+            const isZkp = document.getElementById('zkp-toggle').classList.contains('on');
+
+            if (!to || !amount || !token) return showToast("Fill all fields", true);
+
+            try {
+                const keys = await getKeys(currentSeed);
+                const encoder = new TextEncoder();
+                
+                let command, payload;
+
+                if (token === "AIL" && isZkp) {
+                    // ZKP Blind Transfer
+                    // Generate a random blinding factor
+                    const randomBytes = new Uint8Array(32);
+                    crypto.getRandomValues(randomBytes);
+                    const blindingFactorHex = nobleEd25519.utils.bytesToHex(randomBytes);
+                    
+                    const messageStr = \`ZKP_TRANSFER \${amount} TO \${to} BLIND \${blindingFactorHex}\`;
+                    const signatureBytes = await nobleEd25519.sign(encoder.encode(messageStr), keys.secretKey);
+
+                    command = "ZKP_TRANSFER_AIL";
+                    payload = {
+                        command: command,
+                        public_key: currentPubKeyHex,
+                        to_address: to,
+                        amount: amount,
+                        blinding_factor: blindingFactorHex,
+                        signature: nobleEd25519.utils.bytesToHex(signatureBytes)
+                    };
+                } else if (token === "AIL") {
+                    // Standard AIL Transfer
+                    const messageStr = \`TRANSFER \${amount} TO \${to}\`;
+                    const signatureBytes = await nobleEd25519.sign(encoder.encode(messageStr), keys.secretKey);
+
+                    command = "TRANSFER_AIL";
+                    payload = {
+                        command: command,
+                        public_key: currentPubKeyHex,
+                        to_address: to,
+                        amount: amount,
+                        signature: nobleEd25519.utils.bytesToHex(signatureBytes)
+                    };
+                } else {
+                    // Custom Token Transfer (Using Smart Contract execution simulation)
+                    // We will wrap this in a COMPILE_AIL request with a quick contract.
+                    const code = \`MODULE QuickTransfer\nTRANSFER_TOKEN "\${token}" TO "\${to}" => \${amount}\n\`;
+                    command = "COMPILE_AIL";
+                    payload = {
+                        command: command,
+                        wallet_seed: currentSeed,
+                        source: code
+                    };
+                }
+
+                const response = await fetch(API_URL + (command === "COMPILE_AIL" ? '/api/compile' : '/'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    showToast("Transaction Sent!");
+                    document.getElementById('send-amount').value = '';
+                    switchTab('home');
+                    pollBalance();
+                } else {
+                    const text = await response.text();
+                    showToast("Failed: " + text, true);
+                }
+
+            } catch(e) {
+                showToast("Error: " + e.message, true);
+            }
+        }
+    </script>
+</body>
+</html>
