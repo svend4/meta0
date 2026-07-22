@@ -454,6 +454,39 @@ fn handle_client(mut stream: std::net::TcpStream, router: &SemanticRouter, state
             let _ = stream.write_all(http_response.as_bytes());
             return;
         }
+
+        if payload_str.starts_with("POST /api/teleport") {
+            let mut target_chain = "Solana".to_string();
+            let mut remote_address = "0x0".to_string();
+            let mut payload = "{}".to_string();
+
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&json_payload_str) {
+                if let Some(t) = json.get("target_chain").and_then(|v| v.as_str()) {
+                    target_chain = t.to_string();
+                }
+                if let Some(a) = json.get("remote_address").and_then(|v| v.as_str()) {
+                    remote_address = a.to_string();
+                }
+                if let Some(p) = json.get("payload").and_then(|v| v.as_str()) {
+                    payload = p.to_string();
+                }
+            }
+
+            let receipt_id = format!("TELEPORT_RECEIPT_{}_{}", target_chain.to_uppercase(), hex::encode(&payload.as_bytes()[..payload.len().min(6)]));
+            println!("[Multiverse Bridge] 🌀 Teleporting state to {} ({}) - Receipt: {}", target_chain, remote_address, receipt_id);
+
+            let resp = serde_json::json!({
+                "status": "Teleported",
+                "receipt_id": receipt_id,
+                "target_chain": target_chain,
+                "remote_address": remote_address,
+                "timestamp": format!("{:?}", std::time::SystemTime::now())
+            });
+            let json_resp = serde_json::to_string(&resp).unwrap_or_default();
+            let http_response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nAccess-Control-Allow-Origin: *\r\n\r\n{}", json_resp);
+            let _ = stream.write_all(http_response.as_bytes());
+            return;
+        }
         
         if payload_str.starts_with("GET /api/holo_reconstruct") {
             // Extract hash from URL: /api/holo_reconstruct?hash=...

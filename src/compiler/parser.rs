@@ -24,6 +24,7 @@ pub enum AstNode {
     IntentManifest { intents: Vec<String> }, // [sandbox::allow(...)]
     ParallelAsync { body: Vec<AstNode> },
     IntuitionBranch { prompt: String, true_branch: Vec<AstNode>, false_branch: Vec<AstNode> },
+    CrossChainTeleport { target_chain: String, remote_address: String, payload: String },
 }
 
 pub struct Parser {
@@ -309,10 +310,41 @@ impl Parser {
                                         }
                                     }
                                 }
-                                ast.push(AstNode::IntuitionBranch { prompt: prompt.clone(), true_branch, false_branch });
+                                 ast.push(AstNode::IntuitionBranch { prompt: prompt.clone(), true_branch, false_branch });
                                 continue;
                             }
                         }
+                    }
+                }
+                Token::Keyword(kw) if kw == "TELEPORT" => {
+                    if let Some(Token::StringLiteral(target)) = self.tokens.get(*i + 1) {
+                        let mut remote_addr = "0x0".to_string();
+                        let mut payload_str = "{}".to_string();
+                        if let Some(Token::Keyword(to_kw)) = self.tokens.get(*i + 2) {
+                            if to_kw == "TO" {
+                                if let Some(Token::StringLiteral(addr)) = self.tokens.get(*i + 3) {
+                                    remote_addr = addr.clone();
+                                    if let Some(Token::Keyword(p_kw)) = self.tokens.get(*i + 4) {
+                                        if p_kw == "PAYLOAD" {
+                                            if let Some(Token::StringLiteral(pld)) = self.tokens.get(*i + 5) {
+                                                payload_str = pld.clone();
+                                                *i += 5;
+                                            }
+                                        } else {
+                                            *i += 3;
+                                        }
+                                    } else {
+                                        *i += 3;
+                                    }
+                                }
+                            }
+                        }
+                        ast.push(AstNode::CrossChainTeleport {
+                            target_chain: target.clone(),
+                            remote_address: remote_addr,
+                            payload: payload_str,
+                        });
+                        *i += 1;
                     }
                 }
                 Token::Keyword(kw) if kw == "MINT_TOKEN" => {

@@ -577,6 +577,19 @@ IF good_score > 0.8 {
             </h2>
             <div id="explorer-container" class="explorer-scroll">
                 <!-- Blocks will be injected here -->
+        <!-- Phase 52: Exocortex Interactive Cyber-Terminal -->
+        <div class="glass-panel glow-purple" style="margin-top: 2rem; background: rgba(10, 5, 20, 0.85); border: 1px solid var(--neon-purple);">
+            <h2 class="neon-purple">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                Exocortex Cyber-Terminal (Interactive CLI)
+            </h2>
+            <div id="terminal-window" style="background: rgba(0,0,0,0.85); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--neon-green); padding: 15px; border-radius: 8px; height: 180px; overflow-y: auto; border: 1px solid rgba(181,55,242,0.3); margin-bottom: 10px;">
+                <div>[Exocortex OS v52.0] Initialized interactive terminal. Type <span style="color:var(--neon-cyan)">'help'</span> for available commands.</div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <span style="color: var(--neon-purple); font-weight: bold; align-self: center; font-family: monospace;">AIL-CLI&gt;</span>
+                <input type="text" id="terminal-input" placeholder="Type command (e.g. help, status, omega, teleport, clear)..." style="flex: 1; background: rgba(0,0,0,0.6); color: white; border: 1px solid var(--neon-purple); border-radius: 6px; padding: 8px 12px; font-family: monospace;" onkeydown="handleTerminalCommand(event)">
+                <button class="btn btn-purple" style="width: auto; padding: 8px 20px;" onclick="execTerminalCommand()">Execute</button>
             </div>
         </div>
 
@@ -1239,6 +1252,75 @@ IF good_score > 0.8 {
                     log.scrollTop = log.scrollHeight;
                 }, 1000);
             }, 800);
+        }
+
+        // --- Phase 52: Exocortex Terminal Commands ---
+        function handleTerminalCommand(e) {
+            if (e.key === 'Enter') {
+                execTerminalCommand();
+            }
+        }
+
+        async function execTerminalCommand() {
+            const inputEl = document.getElementById('terminal-input');
+            const term = document.getElementById('terminal-window');
+            const cmd = inputEl.value.trim();
+            if (!cmd) return;
+
+            term.innerHTML += `<div style="color:white; margin-top:5px;">&gt; ${cmd}</div>`;
+            inputEl.value = '';
+
+            const parts = cmd.split(' ');
+            const primary = parts[0].toLowerCase();
+
+            if (primary === 'help') {
+                term.innerHTML += `
+                    <div style="color:var(--neon-cyan)">Available Commands:</div>
+                    - <span style="color:var(--neon-purple)">status</span>: Fetch live node telemetry<br>
+                    - <span style="color:var(--neon-purple)">teleport [chain] [address] [payload]</span>: Trigger Inter-Chain Teleportation<br>
+                    - <span style="color:var(--neon-purple)">omega</span>: Force Omega Point Singularity<br>
+                    - <span style="color:var(--neon-purple)">burn</span>: Simulate Neuro-Burn penalty<br>
+                    - <span style="color:var(--neon-purple)">clear</span>: Clear terminal logs
+                `;
+            } else if (primary === 'clear') {
+                term.innerHTML = `<div>[Exocortex OS v52.0] Terminal cleared.</div>`;
+            } else if (primary === 'status') {
+                try {
+                    let res = await fetch('http://127.0.0.1:7878/api/ast_status');
+                    let data = await res.json();
+                    term.innerHTML += `<div style="color:var(--neon-green)">Pipeline Stage: ${data.pipeline_stage} | Inliner: ${data.inliner_status}</div>`;
+                } catch(err) {
+                    term.innerHTML += `<div style="color:red">Failed to reach node API</div>`;
+                }
+            } else if (primary === 'teleport') {
+                let target = parts[1] || 'Solana';
+                let addr = parts[2] || 'AIL_SOL_REMOTE_0x99';
+                let payload = parts.slice(3).join(' ') || '{"action":"STAKE","amount":100}';
+                try {
+                    let res = await fetch('http://127.0.0.1:7878/api/teleport', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ target_chain: target, remote_address: addr, payload: payload })
+                    });
+                    let data = await res.json();
+                    term.innerHTML += `<div style="color:var(--neon-cyan)">🌀 [Teleport Success] Receipt: ${data.receipt_id} -&gt; ${data.target_chain}</div>`;
+                } catch(err) {
+                    term.innerHTML += `<div style="color:red">Teleport request failed</div>`;
+                }
+            } else if (primary === 'omega') {
+                term.innerHTML += `<div style="color:red; font-weight:bold;">🚨 FORCING OMEGA POINT SINGULARITY BROADCAST...</div>`;
+                document.body.classList.add('omega-mode');
+                document.querySelector('header h1').innerText = "AIL EXOCORTEX 3.0 [OMEGA SINGULARITY]";
+                document.querySelector('header h1').style.color = "#ff3333";
+                document.querySelector('header h1').style.animation = "pulse-glow 0.5s infinite";
+                document.body.style.background = "linear-gradient(135deg, #2a0000 0%, #110000 100%)";
+            } else if (primary === 'burn') {
+                term.innerHTML += `<div style="color:var(--neon-orange)">🔥 Simulated Neuro-Burn: 10 AIL burned due to Sandbox Violation.</div>`;
+            } else {
+                term.innerHTML += `<div style="color:orange">Command not recognized: '${primary}'. Type 'help'.</div>`;
+            }
+
+            term.scrollTop = term.scrollHeight;
         }
 
     </script>

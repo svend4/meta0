@@ -244,6 +244,12 @@ impl AilVirtualMachine {
                         self.execute_internal(false_branch, deployer, wm, tx);
                     }
                 }
+                AstNode::CrossChainTeleport { target_chain, remote_address, payload } => {
+                    println!("[AIL-VM] 🌀 Inter-Chain Teleportation: Трансляция AST-состояния в target chain: '{}' ({})", target_chain, remote_address);
+                    println!("[AIL-VM] 📦 Teleport Payload: {}", payload);
+                    let receipt_id = format!("RECEIPT-{}", hex::encode(&payload.as_bytes()[..payload.len().min(8)]));
+                    println!("[AIL-VM] 📜 Криптографический чек генерирован: {}", receipt_id);
+                }
             }
         }
     }

@@ -102,7 +102,7 @@ impl Lexer {
             }
             
             match word.as_str() {
-                "MODULE" | "QUANTUM_STATE" | "STORE" | "ADD" | "SUB" | "MUL" | "DIV" | "IF" | "ELSE" | "LOOP" | "ORACLE_FETCH" | "AI_ANALYZE" | "INTUITION_BRANCH" | "EXTRACT" | "AS" | "MINT_TOKEN" | "TRANSFER_TOKEN" | "TO" => tokens.push(Token::Keyword(word)),
+                "MODULE" | "QUANTUM_STATE" | "STORE" | "ADD" | "SUB" | "MUL" | "DIV" | "IF" | "ELSE" | "LOOP" | "ORACLE_FETCH" | "AI_ANALYZE" | "INTUITION_BRANCH" | "TELEPORT" | "PAYLOAD" | "EXTRACT" | "AS" | "MINT_TOKEN" | "TRANSFER_TOKEN" | "TO" => tokens.push(Token::Keyword(word)),
                 _ => {
                     if let Ok(num) = word.parse::<f64>() {
                         tokens.push(Token::Number(num));
